@@ -19,9 +19,11 @@ COPY src ./src
 COPY tsconfig.json ./
 COPY prisma ./prisma
 
+# Generate Prisma client first (before build)
+RUN npm run prisma:generate
+
 # Build TypeScript
 RUN npm run build
-RUN npm run prisma:generate
 
 # Set environment to production
 ENV NODE_ENV=production

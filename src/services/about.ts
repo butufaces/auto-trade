@@ -69,19 +69,19 @@ export class AboutService {
 
       platformAboutCache = {
         platformName:
-          settingsMap.get("PLATFORM_NAME") || config.PLATFORM_NAME,
-        about: settingsMap.get("PLATFORM_ABOUT") || config.PLATFORM_ABOUT,
-        website: settingsMap.get("PLATFORM_WEBSITE") || config.PLATFORM_WEBSITE,
+          (settingsMap.get("PLATFORM_NAME") as string) || config.PLATFORM_NAME,
+        about: (settingsMap.get("PLATFORM_ABOUT") as string) || config.PLATFORM_ABOUT,
+        website: (settingsMap.get("PLATFORM_WEBSITE") as string) || config.PLATFORM_WEBSITE,
         supportEmail:
-          settingsMap.get("PLATFORM_SUPPORT_EMAIL") ||
+          (settingsMap.get("PLATFORM_SUPPORT_EMAIL") as string) ||
           config.PLATFORM_SUPPORT_EMAIL,
-        mission: settingsMap.get("PLATFORM_MISSION") || "",
-        vision: settingsMap.get("PLATFORM_VISION") || "",
-        termsUrl: settingsMap.get("PLATFORM_TERMS_URL") || "",
-        privacyUrl: settingsMap.get("PLATFORM_PRIVACY_URL") || "",
-        welcomeText: settingsMap.get("WELCOME_TEXT") || "",
-        welcomeMediaFileId: settingsMap.get("WELCOME_MEDIA_FILE_ID") || "",
-        welcomeMediaType: settingsMap.get("WELCOME_MEDIA_TYPE") || "photo",
+        mission: (settingsMap.get("PLATFORM_MISSION") as string) || "",
+        vision: (settingsMap.get("PLATFORM_VISION") as string) || "",
+        termsUrl: (settingsMap.get("PLATFORM_TERMS_URL") as string) || "",
+        privacyUrl: (settingsMap.get("PLATFORM_PRIVACY_URL") as string) || "",
+        welcomeText: (settingsMap.get("WELCOME_TEXT") as string) || "",
+        welcomeMediaFileId: (settingsMap.get("WELCOME_MEDIA_FILE_ID") as string) || "",
+        welcomeMediaType: (settingsMap.get("WELCOME_MEDIA_TYPE") as string) || "photo",
       };
 
       logger.info(`[AboutService] Cache updated with media:`, {
