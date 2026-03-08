@@ -22,22 +22,32 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string | null> {
       url: invoiceUrl.substring(0, 100),
     });
 
-    // Path to system Chrome browser
-    const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-
-    // Launch browser with extended timeout and system Chrome
-    browser = await puppeteer.launch({
+    // Detect platform and use appropriate browser
+    let launchOptions: any = {
       headless: true,
-      executablePath: chromeExe,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
-        "--disable-web-resources",
-        "--disable-extensions",
       ],
-    });
+    };
+
+    // On Windows, try to use system Chrome first, fallback to bundled
+    if (process.platform === "win32") {
+      const fs = await import("fs");
+      const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+      
+      if (fs.existsSync(chromeExe)) {
+        launchOptions.executablePath = chromeExe;
+        logger.info(`[CRYPTO] Using system Chrome at ${chromeExe}`);
+      } else {
+        logger.info(`[CRYPTO] System Chrome not found, using bundled Chromium`);
+      }
+    }
+    // On Linux (Docker), always use bundled Chromium
+
+    browser = await puppeteer.launch(launchOptions);
 
     const page = await browser.newPage();
 
