@@ -1,0 +1,34 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+logs/
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.prisma/
+.env.example.local
+
+# Test and debugging files
+check-*.js
+check-*.mjs
+test-*.js
+test-*.mjs
+fix-*.mjs
+
+# SSH keys (never commit)
+*.key
+*.pem
+
+# IDE and editor
+*.code-workspace
+.history/
+
+# OS files
+Thumbs.db
+.DS_Store

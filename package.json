@@ -1,0 +1,58 @@
+{
+  "name": "telegram-investment-bot",
+  "version": "1.0.0",
+  "description": "Production-ready Telegram Investment Bot with grammY and Prisma",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "db:seed": "tsx src/scripts/seed.ts",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "investment",
+    "grammY",
+    "prisma"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@types/node-cron": "^3.0.11",
+    "axios": "^1.13.6",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.3.1",
+    "grammy": "^1.20.2",
+    "node-cron": "^3.0.2",
+    "nodemailer": "^6.9.7",
+    "playwright": "^1.58.2",
+    "puppeteer": "^24.38.0",
+    "qrcode": "^1.5.4",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/nodemailer": "^6.4.14",
+    "@types/qrcode": "^1.5.6",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.0",
+    "prisma": "^5.7.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
