@@ -33,19 +33,38 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string | null> {
       ],
     };
 
-    // On Windows, try to use system Chrome first, fallback to bundled
+    const fs = await import("fs");
+
     if (process.platform === "win32") {
-      const fs = await import("fs");
+      // Windows: try system Chrome first, fallback to bundled
       const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-      
       if (fs.existsSync(chromeExe)) {
         launchOptions.executablePath = chromeExe;
         logger.info(`[CRYPTO] Using system Chrome at ${chromeExe}`);
       } else {
         logger.info(`[CRYPTO] System Chrome not found, using bundled Chromium`);
       }
+    } else if (process.platform === "linux") {
+      // Linux: try system Chromium first
+      const chromiumPaths = [
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/snap/bin/chromium",
+      ];
+      
+      for (const path of chromiumPaths) {
+        if (fs.existsSync(path)) {
+          launchOptions.executablePath = path;
+          logger.info(`[CRYPTO] Using system Chromium at ${path}`);
+          break;
+        }
+      }
+      
+      if (!launchOptions.executablePath) {
+        logger.info(`[CRYPTO] System Chromium not found, using bundled Chromium`);
+      }
     }
-    // On Linux (Docker), always use bundled Chromium
+    // macOS: use bundled Chromium (usually works fine)
 
     browser = await puppeteer.launch(launchOptions);
 
