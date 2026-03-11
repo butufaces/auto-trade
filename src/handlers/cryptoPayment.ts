@@ -10,156 +10,259 @@ import puppeteer from "puppeteer";
 
 type SessionContext = any;
 
-/**
- * Fetch invoice page using Puppeteer to execute JavaScript and get the final payment URL
- */
-async function fetchInvoiceUrl(invoiceUrl: string): Promise<string | null> {
-  let browser = null;
-  try {
-    if (!invoiceUrl) return null;
+// Browser pooling for performance
+let cachedBrowser: any = null;
 
-    logger.info(`[CRYPTO] Launching Puppeteer to fetch final payment URL:`, {
-      url: invoiceUrl.substring(0, 100),
-    });
-
-    // Detect platform and use appropriate browser
-    let launchOptions: any = {
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
-    };
-
-    const fs = await import("fs");
-
-    if (process.platform === "win32") {
-      // Windows: try system Chrome first, fallback to bundled
-      const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-      if (fs.existsSync(chromeExe)) {
-        launchOptions.executablePath = chromeExe;
-        logger.info(`[CRYPTO] Using system Chrome at ${chromeExe}`);
-      } else {
-        logger.info(`[CRYPTO] System Chrome not found, using bundled Chromium`);
-      }
-    } else if (process.platform === "linux") {
-      // Linux: try system Chromium first
-      const chromiumPaths = [
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-        "/snap/bin/chromium",
-      ];
-      
-      for (const path of chromiumPaths) {
-        if (fs.existsSync(path)) {
-          launchOptions.executablePath = path;
-          logger.info(`[CRYPTO] Using system Chromium at ${path}`);
-          break;
-        }
-      }
-      
-      if (!launchOptions.executablePath) {
-        logger.info(`[CRYPTO] System Chromium not found, using bundled Chromium`);
-      }
-    }
-    // macOS: use bundled Chromium (usually works fine)
-
-    browser = await puppeteer.launch(launchOptions);
-
-    const page = await browser.newPage();
-
-    // Set very long timeouts to allow full page render
-    page.setDefaultNavigationTimeout(120000); // 2 minutes
-    page.setDefaultTimeout(120000);
-
-    // Navigate to invoice page
-    logger.info(`[CRYPTO] Navigating to invoice page...`);
+async function getOrCreateBrowser(launchOptions: any) {
+  if (cachedBrowser) {
     try {
-      const response = await page.goto(invoiceUrl, { 
-        waitUntil: "domcontentloaded",
-        timeout: 120000 
-      });
-      logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
-    } catch (navErr) {
-      logger.warn(`[CRYPTO] Navigation error (continuing anyway):`, {
-        message: navErr instanceof Error ? navErr.message : String(navErr),
-      });
-    }
-
-    // First wait for initial rendering
-    logger.info(`[CRYPTO] Waiting 3 seconds for initial render...`);
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Wait for network to settle
-    logger.info(`[CRYPTO] Waiting for network to settle (5 seconds)...`);
-    try {
-      await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 }).catch(() => {});
-    } catch (e) {
-      logger.info(`[CRYPTO] No navigation occurred`);
-    }
-
-    // Additional wait for any dynamic JS rendering
-    logger.info(`[CRYPTO] Waiting 5 more seconds for final JS render...`);
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // Extract the final URL from the page
-    // @ts-ignore - page.evaluate() executes in browser context where window/document are available
-    const finalUrl = await page.evaluate(() => {
-      // Primary: Check window.location (should have redirected by now)
-      if (window.location.href && window.location.href !== "about:blank") {
-        return window.location.href;
-      }
-
-      // Secondary: Look for payment link in various elements
-      const paymentLink =
-        (document.querySelector('a[href*="payment"]') as any)?.href ||
-        (document.querySelector('a[href*="checkout"]') as any)?.href ||
-        (document.querySelector('a[href*="crypto"]') as any)?.href ||
-        (document.querySelector('a[href*="invoice"]') as any)?.href ||
-        (document.querySelector('button[onclick*="payment"]') as any)?.onclick?.toString();
-
-      if (paymentLink && typeof paymentLink === 'string' && paymentLink.startsWith("http")) {
-        return paymentLink;
-      }
-
-      // Tertiary: Check for meta redirects
-      const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
-      if (metaRefresh) {
-        const content = metaRefresh.getAttribute("content");
-        const urlMatch = content?.match(/url=([^;]+)/i);
-        if (urlMatch && urlMatch[1]) {
-          return urlMatch[1].trim().replace(/['"]/g, "");
-        }
-      }
-
-      // Fallback: Return current window location
-      return window.location.href;
-    });
-
-    logger.info(`[CRYPTO] Final URL extracted from page:`, {
-      url: finalUrl.substring(0, 150),
-    });
-
-    return finalUrl;
-  } catch (error) {
-    logger.warn(`[CRYPTO] Error with Puppeteer extraction:`, {
-      message: error instanceof Error ? error.message : String(error),
-      url: invoiceUrl?.substring(0, 100),
-    });
-    return null;
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeErr) {
-        logger.debug(`[CRYPTO] Error closing Puppeteer browser:`, {
-          message: closeErr instanceof Error ? closeErr.message : String(closeErr),
-        });
-      }
+      await cachedBrowser.version(); // Test if still alive
+      return cachedBrowser;
+    } catch {
+      cachedBrowser = null;
     }
   }
+  cachedBrowser = await puppeteer.launch(launchOptions);
+  return cachedBrowser;
+}
+
+/**
+ * Extract payment URL with multiple strategies and retry logic
+ * GUARANTEES URL fetch or throws error with detailed diagnosis
+ */
+async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
+  if (!invoiceUrl) throw new Error("[CRYPTO] Invoice URL is empty");
+
+  const MAX_RETRIES = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    let browser = null;
+    let page = null;
+    
+    try {
+      logger.info(`[CRYPTO] Fetch attempt ${attempt}/${MAX_RETRIES}:`, {
+        url: invoiceUrl.substring(0, 100),
+      });
+
+      // Detect platform and use appropriate browser
+      let launchOptions: any = {
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+        ],
+      };
+
+      const fs = await import("fs");
+
+      if (process.platform === "win32") {
+        const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+        if (fs.existsSync(chromeExe)) {
+          launchOptions.executablePath = chromeExe;
+          logger.info(`[CRYPTO] Using system Chrome`);
+        }
+      } else if (process.platform === "linux") {
+        const chromiumPaths = [
+          "/usr/bin/chromium-browser",
+          "/usr/bin/chromium",
+          "/snap/bin/chromium",
+        ];
+        for (const path of chromiumPaths) {
+          if (fs.existsSync(path)) {
+            launchOptions.executablePath = path;
+            logger.info(`[CRYPTO] Using system Chromium at ${path}`);
+            break;
+          }
+        }
+      }
+
+      browser = await getOrCreateBrowser(launchOptions);
+      page = await browser.newPage();
+
+      page.setDefaultNavigationTimeout(45000);
+      page.setDefaultTimeout(45000);
+
+      // Navigate to invoice page
+      logger.info(`[CRYPTO] Navigating to invoice page...`);
+      const response = await page.goto(invoiceUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: 40000,
+      });
+      logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
+
+      // STRATEGY 1: Wait for URL change (most reliable)
+      logger.info(`[CRYPTO] Attempting URL extraction (Strategy 1: Navigation)...`);
+      let finalUrl: string | null = null;
+
+      try {
+        await Promise.race([
+          page.waitForNavigation({ timeout: 8000 }),
+          new Promise(resolve => setTimeout(resolve, 3000)),
+        ]);
+        finalUrl = page.url();
+        logger.info(`[CRYPTO] URL from navigation: ${finalUrl}`);
+      } catch {
+        logger.info(`[CRYPTO] Navigation timeout, trying next strategy...`);
+      }
+
+      // STRATEGY 2: Check window.location directly
+      if (!finalUrl || finalUrl === "about:blank") {
+        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 2: window.location)...`);
+        try {
+          finalUrl = await page.evaluate(() => {
+            if (window.location.href && window.location.href !== "about:blank") {
+              return window.location.href;
+            }
+            return null;
+          });
+          if (finalUrl) logger.info(`[CRYPTO] URL from window.location: ${finalUrl}`);
+        } catch (e) {
+          logger.warn(`[CRYPTO] Failed to evaluate window.location:`, {
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // STRATEGY 3: Search for payment/checkout links in DOM
+      if (!finalUrl || finalUrl === "about:blank") {
+        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 3: DOM Links)...`);
+        try {
+          finalUrl = await page.evaluate(() => {
+            const selectors = [
+              'a[href*="payment"]',
+              'a[href*="checkout"]',
+              'a[href*="crypto"]',
+              'a[href*="invoice"]',
+              'a[href*="nowpayment"]',
+              'button[onclick*="payment"]',
+              'a[href^="http"]', // Any absolute link
+            ];
+
+            for (const selector of selectors) {
+              const element = document.querySelector(selector) as any;
+              if (element) {
+                const href = element.getAttribute("href") || element.href;
+                if (href && typeof href === "string" && href.startsWith("http")) {
+                  return href;
+                }
+              }
+            }
+            return null;
+          });
+          if (finalUrl) logger.info(`[CRYPTO] URL from DOM: ${finalUrl}`);
+        } catch (e) {
+          logger.warn(`[CRYPTO] Failed to search DOM:`, {
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // STRATEGY 4: Check for meta redirects and JS redirects
+      if (!finalUrl || finalUrl === "about:blank") {
+        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 4: Meta/JS Redirects)...`);
+        try {
+          finalUrl = await page.evaluate(() => {
+            // Meta refresh redirect
+            const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
+            if (metaRefresh) {
+              const content = metaRefresh.getAttribute("content");
+              const urlMatch = content?.match(/url=([^;]+)/i);
+              if (urlMatch && urlMatch[1]) {
+                return urlMatch[1].trim().replace(/['"]/g, "");
+              }
+            }
+
+            // Check for common JS redirect patterns
+            if ((window as any).location?.href) {
+              return (window as any).location.href;
+            }
+
+            return null;
+          });
+          if (finalUrl) logger.info(`[CRYPTO] URL from meta/JS: ${finalUrl}`);
+        } catch (e) {
+          logger.warn(`[CRYPTO] Failed meta/JS extraction:`, {
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // STRATEGY 5: Wait longer and extract any final URL
+      if (!finalUrl || finalUrl === "about:blank") {
+        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Extended Wait)...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        try {
+          finalUrl = await page.evaluate(() => {
+            return window.location.href;
+          });
+          if (finalUrl && finalUrl !== "about:blank") {
+            logger.info(`[CRYPTO] URL from extended wait: ${finalUrl}`);
+          }
+        } catch (e) {
+          logger.warn(`[CRYPTO] Extended wait extraction failed`);
+        }
+      }
+
+      // Success - return the URL
+      if (finalUrl && finalUrl !== "about:blank") {
+        logger.info(`[CRYPTO] ✓ Payment URL successfully fetched on attempt ${attempt}`, {
+          url: finalUrl.substring(0, 150),
+        });
+        return finalUrl;
+      }
+
+      // Log failure for this attempt
+      lastError = new Error(
+        `[CRYPTO] All extraction strategies failed on attempt ${attempt}`
+      );
+      logger.warn(`[CRYPTO] Attempt ${attempt} failed, retrying...`, {
+        strategies_tried: 5,
+      });
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      logger.warn(`[CRYPTO] Attempt ${attempt} error:`, {
+        message: lastError.message,
+        attempt,
+      });
+
+      // Don't retry on network/invalid URL errors
+      if (
+        lastError.message.includes("net::ERR_") ||
+        lastError.message.includes("Invalid URL")
+      ) {
+        throw new Error(
+          `[CRYPTO] Invalid or unreachable URL: ${lastError.message}`
+        );
+      }
+    } finally {
+      if (page) {
+        try {
+          await page.close();
+        } catch (e) {
+          logger.debug(`[CRYPTO] Error closing page:`, {
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+    }
+
+    // Wait before retry
+    if (attempt < MAX_RETRIES) {
+      const waitTime = Math.min(1000 * attempt, 5000);
+      logger.info(`[CRYPTO] Waiting ${waitTime}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  // All retries exhausted
+  const errorMsg = `[CRYPTO] Failed to fetch payment URL after ${MAX_RETRIES} attempts. Last error: ${lastError?.message || "Unknown"}`;
+  logger.error(errorMsg, { url: invoiceUrl.substring(0, 100) });
+  throw new Error(errorMsg);
 }
 
 /**
@@ -669,29 +772,28 @@ async function createCryptoPayment(
           logger.info(`[CRYPTO] Starting invoice URL fetch with Puppeteer...`);
           const extractedUrl = await fetchInvoiceUrl(finalPaymentUrl);
           
-          if (extractedUrl) {
-            logger.info(`[CRYPTO] Final payment URL extracted successfully:`, {
-              url: extractedUrl.substring(0, 100),
+          logger.info(`[CRYPTO] Final payment URL extracted successfully:`, {
+            url: extractedUrl.substring(0, 100),
+          });
+          
+          finalPaymentUrl = extractedUrl;
+          
+          // Save extracted URL to database
+          try {
+            await prisma.cryptoPayment.update({
+              where: { investmentId },
+              data: { paymentUrl: extractedUrl },
             });
-            
-            finalPaymentUrl = extractedUrl;
-            
-            // Save extracted URL to database
-            try {
-              await prisma.cryptoPayment.update({
-                where: { investmentId },
-                data: { paymentUrl: extractedUrl },
-              });
-              logger.info(`[CRYPTO] Saved final payment URL to database`);
-            } catch (dbErr) {
-              logger.warn(`[CRYPTO] Could not save URL to database:`, {
-                error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              });
-            }
+            logger.info(`[CRYPTO] Saved final payment URL to database`);
+          } catch (dbErr) {
+            logger.warn(`[CRYPTO] Could not save URL to database:`, {
+              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+            });
           }
         } catch (fetchErr) {
-          logger.warn(`[CRYPTO] Error fetching final URL (will use fallback):`, {
+          logger.warn(`[CRYPTO] Error fetching final URL (will use original invoice URL as fallback):`, {
             error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+            fallbackUrl: finalPaymentUrl?.substring(0, 100),
           });
           // Continue with the original invoice URL as fallback
         }
