@@ -4,6 +4,7 @@ import bot from "../index.js";
 import nowpaymentsService from "../services/cryptoPayment.js";
 import { config } from "../config/env.js";
 import TelegramNotificationService from "../services/telegramNotification.js";
+import { calculateMaturityDate } from "../lib/helpers.js";
 
 /**
  * Handle Nowpayments webhook for payment status updates
@@ -97,18 +98,37 @@ export async function handlePaymentWebhook(
         { paymentId: payment_id }
       );
 
-      // Update investment status to ACTIVE
+      // Get the investment's package to calculate new maturity date
+      const investmentWithPackage = await prisma.investment.findUnique({
+        where: { id: investmentId },
+        include: { package: true },
+      });
+
+      if (!investmentWithPackage) {
+        logger.error(`[WEBHOOK] Cannot find investment for maturity recalculation: ${investmentId}`);
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Investment not found" }));
+        return;
+      }
+
+      // Calculate new maturity date from activation time
+      const activationTime = new Date();
+      const newMaturityDate = calculateMaturityDate(investmentWithPackage.package.duration, activationTime);
+
+      // Update investment status to ACTIVE with new maturity date and activation time
       await prisma.investment.update({
         where: { id: investmentId },
         data: {
           status: "ACTIVE",
+          activatedAt: activationTime,
+          maturityDate: newMaturityDate,
           paymentProofStatus: "VERIFIED",
-          paymentVerifiedAt: new Date(),
+          paymentVerifiedAt: activationTime,
         },
       });
 
       // Notify user of payment confirmation
-      await notifyPaymentConfirmed(investment.user.telegramId, investment);
+      await notifyPaymentConfirmed(investment.user.telegramId, investment, newMaturityDate);
 
       // Notify admin of new investment (only when payment is confirmed)
       try {
@@ -129,7 +149,12 @@ export async function handlePaymentWebhook(
       await notifyAdminPaymentConfirmed(investment);
 
       logger.info(
-        `[WEBHOOK] Investment activated automatically: ${order_id}`
+        `[WEBHOOK] Investment activated automatically: ${order_id}`,
+        {
+          activationTime: activationTime.toISOString(),
+          newMaturityDate: newMaturityDate.toISOString(),
+          duration: investmentWithPackage.package.duration,
+        }
       );
     } else if (paymentStatus === "FAILED" || paymentStatus === "EXPIRED") {
       logger.info(
@@ -159,9 +184,12 @@ export async function handlePaymentWebhook(
  */
 async function notifyPaymentConfirmed(
   telegramId: bigint,
-  investment: any
+  investment: any,
+  maturityDate?: Date
 ): Promise<void> {
   try {
+    const maturityToShow = maturityDate || investment.maturityDate;
+    
     const message = `
 ✅ <b>Payment Confirmed!</b>
 
@@ -171,7 +199,7 @@ Your crypto payment has been received and verified.
 📦 Package: ${investment.package?.name || "Unknown"}
 💰 Amount: $${investment.amount.toFixed(2)}
 💵 Expected Return: $${investment.expectedReturn.toFixed(2)}
-📅 Maturity Date: ${investment.maturityDate.toLocaleDateString()}
+📅 Maturity Date: ${maturityToShow.toLocaleDateString()} at ${maturityToShow.toLocaleTimeString()}
 
 ✨ Your investment is now <b>ACTIVE</b> and earning returns!
 

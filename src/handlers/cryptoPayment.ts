@@ -1,7 +1,7 @@
 import logger from "../config/logger.js";
 import prisma from "../db/client.js";
 import nowpaymentsService from "../services/cryptoPayment.js";
-import { formatCurrency } from "../lib/helpers.js";
+import { formatCurrency, calculateMaturityDate } from "../lib/helpers.js";
 import bot from "../index.js";
 import { config } from "../config/env.js";
 import CurrencyService from "../services/currency.js";
@@ -1044,6 +1044,21 @@ function startPaymentStatusChecker(
         
         logger.info(`[CRYPTO] ✅ Payment confirmed for ${investmentId}`);
 
+        // Get investment with package to recalculate maturity date
+        const investmentWithPackage = await prisma.investment.findUnique({
+          where: { id: investmentId },
+          include: { package: true },
+        });
+
+        if (!investmentWithPackage) {
+          logger.error(`[CRYPTO] Investment not found for payment confirmation: ${investmentId}`);
+          return;
+        }
+
+        // Calculate new maturity date from activation time
+        const activationTime = new Date();
+        const newMaturityDate = calculateMaturityDate(investmentWithPackage.package.duration, activationTime);
+
         // Update payment status in database
         await prisma.cryptoPayment.update({
           where: { investmentId },
@@ -1054,11 +1069,13 @@ function startPaymentStatusChecker(
           },
         });
 
-        // Update investment status
+        // Update investment status with activation timestamp and recalculated maturity date
         await prisma.investment.update({
           where: { id: investmentId },
           data: {
             status: "ACTIVE",
+            activatedAt: activationTime,
+            maturityDate: newMaturityDate,
           },
         });
 
@@ -1093,6 +1110,7 @@ export async function handlePaymentConfirmation(investmentId: string): Promise<v
   try {
     const investment = await prisma.investment.findUnique({
       where: { id: investmentId },
+      include: { package: true },
     });
 
     if (!investment) {
@@ -1102,11 +1120,17 @@ export async function handlePaymentConfirmation(investmentId: string): Promise<v
       return;
     }
 
-    // Update investment and payment
+    // Calculate new maturity date from activation time
+    const activationTime = new Date();
+    const newMaturityDate = calculateMaturityDate(investment.package.duration, activationTime);
+
+    // Update investment and payment with activation timestamp and recalculated maturity date
     await prisma.investment.update({
       where: { id: investmentId },
       data: {
         status: "ACTIVE",
+        activatedAt: activationTime,
+        maturityDate: newMaturityDate,
       },
     });
 

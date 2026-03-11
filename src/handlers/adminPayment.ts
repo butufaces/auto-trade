@@ -8,6 +8,7 @@ import {
   formatPaymentDetails,
   formatCurrency,
   formatPaymentProofStatus,
+  calculateMaturityDate,
 } from "../lib/helpers.js";
 import {
   createAdminPaymentAccountKeyboard,
@@ -592,10 +593,27 @@ export async function handleApprovePaymentProof(ctx: any): Promise<void> {
       return;
     }
 
+    // Get investment with package to recalculate maturity date
+    const investmentData = await prisma.investment.findUnique({
+      where: { id: investmentId },
+      include: { package: true },
+    });
+
+    if (!investmentData) {
+      await ctx.reply("❌ Investment not found.");
+      return;
+    }
+
+    // Calculate new maturity date from activation time
+    const activationTime = new Date();
+    const newMaturityDate = calculateMaturityDate(investmentData.package.duration, activationTime);
+
     const investment = (await prisma.investment.update({
       where: { id: investmentId },
       data: {
         status: "ACTIVE" as any,
+        activatedAt: activationTime,
+        maturityDate: newMaturityDate,
         paymentVerifiedAt: new Date(),
       } as any,
       include: { user: true },

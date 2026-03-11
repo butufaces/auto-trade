@@ -7,6 +7,7 @@ import {
   formatCurrency,
   formatDate,
   getUserDisplayName,
+  calculateMaturityDate,
 } from "../lib/helpers.js";
 import { adminMenuKeyboard } from "../utils/keyboard.js";
 import prisma from "../db/client.js";
@@ -440,11 +441,17 @@ export async function handleConfirmDepositManually(ctx: SessionContext, investme
       return;
     }
 
-    // Update investment status to ACTIVE
+    // Calculate new maturity date from activation time
+    const activationTime = new Date();
+    const newMaturityDate = calculateMaturityDate(investment.package.duration, activationTime);
+
+    // Update investment status to ACTIVE with activation timestamp and recalculated maturity date
     const updatedInvestment = await prisma.investment.update({
       where: { id: investmentId },
       data: {
         status: "ACTIVE",
+        activatedAt: activationTime,
+        maturityDate: newMaturityDate,
         paymentProofStatus: "VERIFIED",
         paymentVerifiedAt: new Date(),
       },
@@ -457,7 +464,7 @@ export async function handleConfirmDepositManually(ctx: SessionContext, investme
     try {
       await ctx.api.sendMessage(
         Number(investment.user.telegramId),
-        `✅ <b>Payment Confirmed!</b>\n\nYour payment has been verified by our team.\n\n<b>Investment Details:</b>\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n💵 Expected Return: ${formatCurrency(investment.expectedReturn)}\n📅 Maturity Date: ${investment.maturityDate.toLocaleDateString()}\n\n✨ Your investment is now <b>ACTIVE</b> and earning returns!\n\nUse <b>/portfolio</b> to view your investments.`,
+        `✅ <b>Payment Confirmed!</b>\n\nYour payment has been verified by our team.\n\n<b>Investment Details:</b>\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n💵 Expected Return: ${formatCurrency(investment.expectedReturn)}\n📅 Maturity Date: ${newMaturityDate.toLocaleDateString()}\n\n✨ Your investment is now <b>ACTIVE</b> and earning returns!\n\nUse <b>/portfolio</b> to view your investments.`,
         { parse_mode: "HTML" }
       );
       logger.info(`[NOTIFICATION] Manual confirmation notification sent to user ${investment.userId}`);

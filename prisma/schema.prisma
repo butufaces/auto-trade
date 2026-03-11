@@ -143,6 +143,7 @@ model Investment {
   status                InvestmentStatus @default(PENDING)
   approvalProof         String?          // transaction proof URL/file
   maturityDate          DateTime
+  activatedAt           DateTime?        // Exact time investment was activated (for precise maturity calculation)
   completedAt           DateTime?
   completionProof       String?
   notes                 String?

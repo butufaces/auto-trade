@@ -88,11 +88,13 @@ export function calculateExpectedReturn(
 
 /**
  * Calculate maturity date
+ * @param durationDays - Number of days for investment
+ * @param startDate - Optional start date (defaults to now). If provided, maturity is calculated from this exact time
  */
-export function calculateMaturityDate(durationDays: number): Date {
-  const now = new Date();
-  now.setDate(now.getDate() + durationDays);
-  return now;
+export function calculateMaturityDate(durationDays: number, startDate?: Date): Date {
+  const baseDate = startDate ? new Date(startDate) : new Date();
+  baseDate.setDate(baseDate.getDate() + durationDays);
+  return baseDate;
 }
 
 /**

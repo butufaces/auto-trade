@@ -92,11 +92,27 @@ export class InvestmentService {
    * Approve investment
    */
   static async approveInvestment(investmentId: string, proof: string) {
+    // Get investment and its package to recalculate maturity date
+    const investmentData = await prisma.investment.findUnique({
+      where: { id: investmentId },
+      include: { package: true },
+    });
+
+    if (!investmentData) {
+      throw new Error("Investment not found");
+    }
+
+    // Set activation time to now and recalculate maturity date based on actual activation time
+    const activationTime = new Date();
+    const newMaturityDate = calculateMaturityDate(investmentData.package.duration, activationTime);
+
     const investment = await prisma.investment.update({
       where: { id: investmentId },
       data: {
         status: "ACTIVE",
         approvalProof: proof,
+        activatedAt: activationTime,
+        maturityDate: newMaturityDate,
         updatedAt: new Date(),
       },
       include: { package: true, user: true },
@@ -114,7 +130,7 @@ export class InvestmentService {
     // Update user stats
     await UserService.updateUserStats(investment.userId);
 
-    logger.info(`Investment approved: ${investmentId}`);
+    logger.info(`Investment approved: ${investmentId}, Activated at: ${activationTime}, Matures at: ${newMaturityDate}`);
 
     return investment;
   }
@@ -297,11 +313,11 @@ export class InvestmentService {
     // Calculate total profit
     const totalProfit = investment.expectedReturn - investment.amount;
     
-    // Calculate days from creation to maturity
-    const createdDate = new Date(investment.createdAt);
+    // Calculate days from activation to maturity (use activatedAt if available, otherwise createdAt)
+    const startDate = investment.activatedAt ? new Date(investment.activatedAt) : new Date(investment.createdAt);
     const maturityDate = new Date(investment.maturityDate);
     const totalDays = Math.ceil(
-      (maturityDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+      (maturityDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
     );
 
     // Calculate daily accrual amount (profit distributed daily)
@@ -342,19 +358,19 @@ export class InvestmentService {
     // Calculate total profit
     const totalProfit = investment.expectedReturn - investment.amount;
     
-    // Calculate total days from activation to maturity
-    const createdDate = new Date(investment.createdAt);
+    // Calculate total days from activation to maturity (use activatedAt if available, otherwise createdAt)
+    const startDate = investment.activatedAt ? new Date(investment.activatedAt) : new Date(investment.createdAt);
     const maturityDate = new Date(investment.maturityDate);
     const totalDays = Math.ceil(
-      (maturityDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+      (maturityDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
     );
 
     // Daily rate
     const dailyRate = totalProfit / Math.max(totalDays, 1);
 
-    // Calculate time elapsed since investment was created
+    // Calculate time elapsed since investment was activated (or created if not yet activated)
     const now = new Date();
-    const msElapsed = now.getTime() - createdDate.getTime();
+    const msElapsed = now.getTime() - startDate.getTime();
     const daysElapsed = msElapsed / (1000 * 60 * 60 * 24);
     const hoursElapsed = msElapsed / (1000 * 60 * 60);
     const secondsElapsed = msElapsed / 1000;
