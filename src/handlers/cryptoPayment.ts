@@ -28,12 +28,14 @@ async function getOrCreateBrowser(launchOptions: any) {
 
 /**
  * Extract payment URL with multiple strategies and retry logic
- * GUARANTEES URL fetch or throws error with detailed diagnosis
+ * Optimized for Telegram's 30-second callback timeout
  */
 async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
   if (!invoiceUrl) throw new Error("[CRYPTO] Invoice URL is empty");
 
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 1; // Only 1 retry to stay within time limits
+  const TOTAL_TIMEOUT = 25000; // 25 seconds total (leave buffer for Telegram)
+  const startTime = Date.now();
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -41,8 +43,14 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
     let page = null;
     
     try {
+      // Check if we've exceeded total timeout
+      if (Date.now() - startTime > TOTAL_TIMEOUT) {
+        throw new Error("[CRYPTO] Total timeout exceeded");
+      }
+
       logger.info(`[CRYPTO] Fetch attempt ${attempt}/${MAX_RETRIES}:`, {
         url: invoiceUrl.substring(0, 100),
+        timeElapsed: Date.now() - startTime,
       });
 
       // Detect platform and use appropriate browser
@@ -58,49 +66,49 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
 
       const fs = await import("fs");
 
-      if (process.platform === "win32") {
-        const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-        if (fs.existsSync(chromeExe)) {
-          launchOptions.executablePath = chromeExe;
-          logger.info(`[CRYPTO] Using system Chrome`);
-        }
-      } else if (process.platform === "linux") {
-        const chromiumPaths = [
-          "/usr/bin/chromium-browser",
-          "/usr/bin/chromium",
-          "/snap/bin/chromium",
+      if (process.platform === "linux") {
+        // Oracle Cloud - use system Chromium
+        launchOptions.executablePath = "/usr/bin/chromium";
+        logger.info(`[CRYPTO] Using Oracle Cloud system Chromium at /usr/bin/chromium`);
+      } else if (process.platform === "win32") {
+        const chromeExes = [
+          "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+          "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
         ];
-        for (const path of chromiumPaths) {
-          if (fs.existsSync(path)) {
-            launchOptions.executablePath = path;
-            logger.info(`[CRYPTO] Using system Chromium at ${path}`);
+        for (const chromeExe of chromeExes) {
+          if (fs.existsSync(chromeExe)) {
+            launchOptions.executablePath = chromeExe;
+            logger.info(`[CRYPTO] Using system Chrome at ${chromeExe}`);
             break;
           }
+        }
+        if (!launchOptions.executablePath) {
+          logger.info(`[CRYPTO] Chrome not found locally, using bundled Chromium`);
         }
       }
 
       browser = await getOrCreateBrowser(launchOptions);
       page = await browser.newPage();
 
-      page.setDefaultNavigationTimeout(45000);
-      page.setDefaultTimeout(45000);
+      page.setDefaultNavigationTimeout(15000);
+      page.setDefaultTimeout(15000);
 
-      // Navigate to invoice page
+      // Navigate to invoice page with shorter timeout
       logger.info(`[CRYPTO] Navigating to invoice page...`);
       const response = await page.goto(invoiceUrl, {
         waitUntil: "domcontentloaded",
-        timeout: 40000,
+        timeout: 15000,
       });
       logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
 
-      // STRATEGY 1: Wait for URL change (most reliable)
+      // STRATEGY 1: Wait for URL change (quick timeout)
       logger.info(`[CRYPTO] Attempting URL extraction (Strategy 1: Navigation)...`);
       let finalUrl: string | null = null;
 
       try {
         await Promise.race([
-          page.waitForNavigation({ timeout: 8000 }),
-          new Promise(resolve => setTimeout(resolve, 3000)),
+          page.waitForNavigation({ timeout: 3000 }),
+          new Promise(resolve => setTimeout(resolve, 1000)),
         ]);
         finalUrl = page.url();
         logger.info(`[CRYPTO] URL from navigation: ${finalUrl}`);
@@ -126,7 +134,7 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
         }
       }
 
-      // STRATEGY 3: Search for payment/checkout links in DOM
+      // STRATEGY 3: Search for payment/checkout links in DOM (quick)
       if (!finalUrl || finalUrl === "about:blank") {
         logger.info(`[CRYPTO] Attempting URL extraction (Strategy 3: DOM Links)...`);
         try {
@@ -138,7 +146,7 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
               'a[href*="invoice"]',
               'a[href*="nowpayment"]',
               'button[onclick*="payment"]',
-              'a[href^="http"]', // Any absolute link
+              'a[href^="http"]',
             ];
 
             for (const selector of selectors) {
@@ -160,12 +168,11 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
         }
       }
 
-      // STRATEGY 4: Check for meta redirects and JS redirects
+      // STRATEGY 4: Check for meta redirects (quick)
       if (!finalUrl || finalUrl === "about:blank") {
         logger.info(`[CRYPTO] Attempting URL extraction (Strategy 4: Meta/JS Redirects)...`);
         try {
           finalUrl = await page.evaluate(() => {
-            // Meta refresh redirect
             const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
             if (metaRefresh) {
               const content = metaRefresh.getAttribute("content");
@@ -174,12 +181,9 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
                 return urlMatch[1].trim().replace(/['"]/g, "");
               }
             }
-
-            // Check for common JS redirect patterns
             if ((window as any).location?.href) {
               return (window as any).location.href;
             }
-
             return null;
           });
           if (finalUrl) logger.info(`[CRYPTO] URL from meta/JS: ${finalUrl}`);
@@ -190,26 +194,29 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
         }
       }
 
-      // STRATEGY 5: Wait longer and extract any final URL
+      // STRATEGY 5: Short extended wait only if time permits
       if (!finalUrl || finalUrl === "about:blank") {
-        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Extended Wait)...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        
-        try {
-          finalUrl = await page.evaluate(() => {
-            return window.location.href;
-          });
-          if (finalUrl && finalUrl !== "about:blank") {
-            logger.info(`[CRYPTO] URL from extended wait: ${finalUrl}`);
+        const timeRemaining = TOTAL_TIMEOUT - (Date.now() - startTime);
+        if (timeRemaining > 3000) {
+          logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Short Wait)...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          try {
+            finalUrl = await page.evaluate(() => {
+              return window.location.href;
+            });
+            if (finalUrl && finalUrl !== "about:blank") {
+              logger.info(`[CRYPTO] URL from extended wait: ${finalUrl}`);
+            }
+          } catch (e) {
+            logger.warn(`[CRYPTO] Extended wait extraction failed`);
           }
-        } catch (e) {
-          logger.warn(`[CRYPTO] Extended wait extraction failed`);
         }
       }
 
-      // Success - return the URL
+      // Success - return immediately
       if (finalUrl && finalUrl !== "about:blank") {
-        logger.info(`[CRYPTO] ✓ Payment URL successfully fetched on attempt ${attempt}`, {
+        logger.info(`[CRYPTO] ✓ Payment URL successfully fetched within ${Date.now() - startTime}ms`, {
           url: finalUrl.substring(0, 150),
         });
         return finalUrl;
@@ -219,13 +226,13 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       lastError = new Error(
         `[CRYPTO] All extraction strategies failed on attempt ${attempt}`
       );
-      logger.warn(`[CRYPTO] Attempt ${attempt} failed, retrying...`, {
+      logger.warn(`[CRYPTO] Attempt ${attempt} failed after ${Date.now() - startTime}ms`, {
         strategies_tried: 5,
       });
 
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      logger.warn(`[CRYPTO] Attempt ${attempt} error:`, {
+      logger.warn(`[CRYPTO] Attempt ${attempt} error after ${Date.now() - startTime}ms:`, {
         message: lastError.message,
         attempt,
       });
@@ -251,17 +258,26 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       }
     }
 
-    // Wait before retry
+    // Small wait before retry (if needed and time permits)
     if (attempt < MAX_RETRIES) {
-      const waitTime = Math.min(1000 * attempt, 5000);
-      logger.info(`[CRYPTO] Waiting ${waitTime}ms before retry...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      const timeRemaining = TOTAL_TIMEOUT - (Date.now() - startTime);
+      if (timeRemaining > 3000) {
+        logger.info(`[CRYPTO] Waiting 1s before retry (${Math.round(timeRemaining)}ms remaining)...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        logger.warn(`[CRYPTO] Not enough time for retry, aborting`);
+        break;
+      }
     }
   }
 
-  // All retries exhausted
-  const errorMsg = `[CRYPTO] Failed to fetch payment URL after ${MAX_RETRIES} attempts. Last error: ${lastError?.message || "Unknown"}`;
-  logger.error(errorMsg, { url: invoiceUrl.substring(0, 100) });
+  // All retries exhausted or timeout
+  const totalTime = Date.now() - startTime;
+  const errorMsg = `[CRYPTO] Failed to fetch payment URL within ${totalTime}ms. Last error: ${lastError?.message || "Unknown"}`;
+  logger.error(errorMsg, { 
+    url: invoiceUrl.substring(0, 100),
+    elapsedMs: totalTime,
+  });
   throw new Error(errorMsg);
 }
 
