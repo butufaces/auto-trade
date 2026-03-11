@@ -91,8 +91,25 @@ async function fetchInvoiceUrl(
       const fs = await import("fs");
 
       if (process.platform === "linux") {
-        launchOptions.executablePath = "/usr/bin/chromium";
-        logger.info(`[CRYPTO] Using Oracle Cloud system Chromium at /usr/bin/chromium`);
+        // Oracle Cloud - try multiple paths (chromium-browser is most common)
+        const chromiumPaths = [
+          "/usr/bin/chromium-browser",  // Standard Debian/Ubuntu install
+          "/usr/bin/chromium",           // Snap or alternative install
+          "/snap/bin/chromium",          // Snap package
+          "/usr/local/bin/chromium",     // Custom install
+        ];
+        
+        for (const path of chromiumPaths) {
+          if (fs.existsSync(path)) {
+            launchOptions.executablePath = path;
+            logger.info(`[CRYPTO] Found Chromium at ${path}`);
+            break;
+          }
+        }
+        
+        if (!launchOptions.executablePath) {
+          logger.warn(`[CRYPTO] Chromium not found at common paths, using bundled Chromium`);
+        }
       } else if (process.platform === "win32") {
         const chromeExes = [
           "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -839,10 +856,12 @@ async function createCryptoPayment(
             });
           }
         } catch (fetchErr) {
-          logger.warn(`[CRYPTO] Error fetching final URL (will use original invoice URL as fallback):`, {
+          logger.error(`[CRYPTO] ❌ Error fetching final URL:`, {
             error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
-            fallbackUrl: finalPaymentUrl?.substring(0, 100),
+            errorStack: fetchErr instanceof Error ? fetchErr.stack : "No stack",
+            originalUrl: finalPaymentUrl?.substring(0, 100),
           });
+          logger.warn(`[CRYPTO] Falling back to original invoice URL`);
           // Continue with the original invoice URL as fallback
         }
       }
