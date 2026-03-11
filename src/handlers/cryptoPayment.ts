@@ -136,56 +136,81 @@ async function fetchInvoiceUrl(
       await updateProgress("Connecting to payment processor...");
 
       logger.info(`[CRYPTO] Navigating to invoice page...`);
+      
+      // Capture network responses to find paymentId
+      let capturedPaymentId = null;
+      page.on('response', (response) => {
+        try {
+          if (response.url().includes('nowpayments') && response.status() === 200) {
+            response.text().then(text => {
+              if (text.includes('paymentId')) {
+                const match = text.match(/paymentId["\']?\s*[:=]\s*["\']?(\d+)/);
+                if (match && match[1]) {
+                  capturedPaymentId = match[1];
+                  logger.info(`[CRYPTO] 🎯 Found paymentId in response: ${capturedPaymentId}`);
+                }
+              }
+            }).catch(() => {});
+          }
+        } catch (e) {}
+      });
+
       const response = await page.goto(invoiceUrl, {
-        waitUntil: "networkidle2",  // Wait for JS to run and add paymentId
+        waitUntil: "networkidle2",
         timeout: 25000,
       });
       logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
 
-      // Wait a bit more for JavaScript to add the paymentId parameter
+      // Wait for any dynamic content to load
       await updateProgress("Processing payment details...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Get the final URL after JavaScript has added paymentId
-      const finalUrl = page.url();
-      logger.info(`[CRYPTO] Final URL captured from page:`, {
-        url: finalUrl.substring(0, 150),
+      // Get the current URL
+      let finalUrl = page.url();
+      logger.info(`[CRYPTO] URL after page load:`, {
+        url: finalUrl,
         hasPaymentId: finalUrl.includes("paymentId"),
       });
 
-      // Verify we got a different URL (with paymentId added)
-      if (finalUrl && finalUrl !== invoiceUrl && finalUrl !== "about:blank") {
+      // If paymentId was found in network response but not in URL, add it
+      if (capturedPaymentId && !finalUrl.includes("paymentId")) {
+        const separator = finalUrl.includes("?") ? "&" : "?";
+        finalUrl = `${finalUrl}${separator}paymentId=${capturedPaymentId}`;
+        logger.info(`[CRYPTO] Added paymentId from network response:`, {
+          url: finalUrl,
+          paymentId: capturedPaymentId,
+        });
+      }
+
+      // Verify we have a valid URL
+      if (finalUrl && finalUrl !== "about:blank") {
         logger.info(`[CRYPTO] ✓ Payment URL successfully fetched within ${Date.now() - startTime}ms`, {
-          url: finalUrl.substring(0, 150),
-          initialUrl: invoiceUrl.substring(0, 100),
+          url: finalUrl,
         });
         return finalUrl;
       }
 
-      // If URL didn't change, JS might not have run. Try again with longer wait
-      logger.warn(`[CRYPTO] URL didn't change after JS execution, trying extended wait...`);
-      await updateProgress("Waiting for JavaScript to complete...");
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Last resort: wait longer and check again
+      logger.warn(`[CRYPTO] URL still invalid, waiting 4 more seconds...`);
+      await updateProgress("Waiting for page to fully load...");
+      await new Promise(resolve => setTimeout(resolve, 4000));
 
-      const finalUrlRetry = page.url();
+      finalUrl = page.url();
       logger.info(`[CRYPTO] Final URL after extended wait:`, {
-        url: finalUrlRetry.substring(0, 150),
-        hasPaymentId: finalUrlRetry.includes("paymentId"),
+        url: finalUrl,
+        hasPaymentId: finalUrl.includes("paymentId"),
       });
 
-      if (finalUrlRetry && finalUrlRetry !== "about:blank") {
+      if (finalUrl && finalUrl !== "about:blank") {
         logger.info(`[CRYPTO] ✓ Payment URL successfully fetched (extended wait) within ${Date.now() - startTime}ms`, {
-          url: finalUrlRetry.substring(0, 150),
+          url: finalUrl,
         });
-        return finalUrlRetry;
+        return finalUrl;
       }
 
-      // Last resort: Return what we have if it's valid
-      lastError = new Error(
-        `[CRYPTO] Could not extract final URL with paymentId`
-      );
-      logger.warn(`[CRYPTO] Failed to extract final URL after ${Date.now() - startTime}ms`, {
-        lastUrl: finalUrlRetry.substring(0, 150),
+      lastError = new Error(`[CRYPTO] Could not extract final URL`);
+      logger.error(`[CRYPTO] Failed to extract final URL after ${Date.now() - startTime}ms`, {
+        lastUrl: finalUrl,
       });
 
     } catch (error) {
