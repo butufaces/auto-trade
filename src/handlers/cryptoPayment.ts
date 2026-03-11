@@ -137,72 +137,42 @@ async function fetchInvoiceUrl(
 
       logger.info(`[CRYPTO] Navigating to invoice page...`);
       
-      // Capture network responses to find paymentId
-      let capturedPaymentId = null;
-      page.on('response', (response) => {
-        try {
-          if (response.url().includes('nowpayments') && response.status() === 200) {
-            response.text().then(text => {
-              if (text.includes('paymentId')) {
-                const match = text.match(/paymentId["\']?\s*[:=]\s*["\']?(\d+)/);
-                if (match && match[1]) {
-                  capturedPaymentId = match[1];
-                  logger.info(`[CRYPTO] 🎯 Found paymentId in response: ${capturedPaymentId}`);
-                }
-              }
-            }).catch(() => {});
-          }
-        } catch (e) {}
-      });
-
       const response = await page.goto(invoiceUrl, {
-        waitUntil: "networkidle2",
+        waitUntil: "networkidle0",  // Wait for all network activity to settle
         timeout: 25000,
       });
       logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
+      logger.info(`[CRYPTO] URL after page.goto: ${page.url()}`);
 
-      // Wait for any dynamic content to load
-      await updateProgress("Processing payment details...");
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait specifically for paymentId to appear in the URL
+      await updateProgress("Loading payment details...");
+      logger.info(`[CRYPTO] Waiting for paymentId to appear in URL...`);
+      
+      try {
+        await page.waitForFunction(() => {
+          const url = window.location.href;
+          const hasPaymentId = url.includes('paymentId');
+          if (!hasPaymentId) {
+            logger.debug(`[CRYPTO] URL still waiting for paymentId: ${url}`);
+          }
+          return hasPaymentId;
+        }, { timeout: 20000 });
+        
+        logger.info(`[CRYPTO] ✓ PaymentId detected in URL!`);
+      } catch (e) {
+        logger.warn(`[CRYPTO] Timeout waiting for paymentId, continuing with current URL...`);
+      }
 
-      // Get the current URL
-      let finalUrl = page.url();
-      logger.info(`[CRYPTO] URL after page load:`, {
+      // Get the final URL after waiting for paymentId
+      const finalUrl = page.url();
+      logger.info(`[CRYPTO] Final URL captured:`, {
         url: finalUrl,
         hasPaymentId: finalUrl.includes("paymentId"),
       });
 
-      // If paymentId was found in network response but not in URL, add it
-      if (capturedPaymentId && !finalUrl.includes("paymentId")) {
-        const separator = finalUrl.includes("?") ? "&" : "?";
-        finalUrl = `${finalUrl}${separator}paymentId=${capturedPaymentId}`;
-        logger.info(`[CRYPTO] Added paymentId from network response:`, {
-          url: finalUrl,
-          paymentId: capturedPaymentId,
-        });
-      }
-
-      // Verify we have a valid URL
+      // Return the URL with or without paymentId
       if (finalUrl && finalUrl !== "about:blank") {
         logger.info(`[CRYPTO] ✓ Payment URL successfully fetched within ${Date.now() - startTime}ms`, {
-          url: finalUrl,
-        });
-        return finalUrl;
-      }
-
-      // Last resort: wait longer and check again
-      logger.warn(`[CRYPTO] URL still invalid, waiting 4 more seconds...`);
-      await updateProgress("Waiting for page to fully load...");
-      await new Promise(resolve => setTimeout(resolve, 4000));
-
-      finalUrl = page.url();
-      logger.info(`[CRYPTO] Final URL after extended wait:`, {
-        url: finalUrl,
-        hasPaymentId: finalUrl.includes("paymentId"),
-      });
-
-      if (finalUrl && finalUrl !== "about:blank") {
-        logger.info(`[CRYPTO] ✓ Payment URL successfully fetched (extended wait) within ${Date.now() - startTime}ms`, {
           url: finalUrl,
         });
         return finalUrl;
