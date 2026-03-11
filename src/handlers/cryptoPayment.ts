@@ -137,143 +137,55 @@ async function fetchInvoiceUrl(
 
       logger.info(`[CRYPTO] Navigating to invoice page...`);
       const response = await page.goto(invoiceUrl, {
-        waitUntil: "domcontentloaded",
+        waitUntil: "networkidle2",  // Wait for JS to run and add paymentId
         timeout: 25000,
       });
       logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
 
-      // STRATEGY 1: Wait for URL change (quick timeout)
-      logger.info(`[CRYPTO] Attempting URL extraction (Strategy 1: Navigation)...`);
-      await updateProgress("Checking for redirects...");
-      let finalUrl: string | null = null;
+      // Wait a bit more for JavaScript to add the paymentId parameter
+      await updateProgress("Processing payment details...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      try {
-        await Promise.race([
-          page.waitForNavigation({ timeout: 5000 }),
-          new Promise(resolve => setTimeout(resolve, 2000)),
-        ]);
-        finalUrl = page.url();
-        logger.info(`[CRYPTO] URL from navigation: ${finalUrl}`);
-      } catch {
-        logger.info(`[CRYPTO] Navigation timeout, trying next strategy...`);
-      }
+      // Get the final URL after JavaScript has added paymentId
+      const finalUrl = page.url();
+      logger.info(`[CRYPTO] Final URL captured from page:`, {
+        url: finalUrl.substring(0, 150),
+        hasPaymentId: finalUrl.includes("paymentId"),
+      });
 
-      // STRATEGY 2: Check window.location directly
-      if (!finalUrl || finalUrl === "about:blank") {
-        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 2: window.location)...`);
-        await updateProgress("Extracting payment URL...");
-        try {
-          finalUrl = await page.evaluate(() => {
-            if (window.location.href && window.location.href !== "about:blank") {
-              return window.location.href;
-            }
-            return null;
-          });
-          if (finalUrl) logger.info(`[CRYPTO] URL from window.location: ${finalUrl}`);
-        } catch (e) {
-          logger.warn(`[CRYPTO] Failed to evaluate window.location:`, {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      // STRATEGY 3: Search for payment/checkout links in DOM (quick)
-      if (!finalUrl || finalUrl === "about:blank") {
-        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 3: DOM Links)...`);
-        await updateProgress("Scanning page content...");
-        try {
-          finalUrl = await page.evaluate(() => {
-            const selectors = [
-              'a[href*="payment"]',
-              'a[href*="checkout"]',
-              'a[href*="crypto"]',
-              'a[href*="invoice"]',
-              'a[href*="nowpayment"]',
-              'button[onclick*="payment"]',
-              'a[href^="http"]',
-            ];
-
-            for (const selector of selectors) {
-              const element = document.querySelector(selector) as any;
-              if (element) {
-                const href = element.getAttribute("href") || element.href;
-                if (href && typeof href === "string" && href.startsWith("http")) {
-                  return href;
-                }
-              }
-            }
-            return null;
-          });
-          if (finalUrl) logger.info(`[CRYPTO] URL from DOM: ${finalUrl}`);
-        } catch (e) {
-          logger.warn(`[CRYPTO] Failed to search DOM:`, {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      // STRATEGY 4: Check for meta redirects (quick)
-      if (!finalUrl || finalUrl === "about:blank") {
-        logger.info(`[CRYPTO] Attempting URL extraction (Strategy 4: Meta/JS Redirects)...`);
-        await updateProgress("Processing redirects...");
-        try {
-          finalUrl = await page.evaluate(() => {
-            const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
-            if (metaRefresh) {
-              const content = metaRefresh.getAttribute("content");
-              const urlMatch = content?.match(/url=([^;]+)/i);
-              if (urlMatch && urlMatch[1]) {
-                return urlMatch[1].trim().replace(/['"]/g, "");
-              }
-            }
-            if ((window as any).location?.href) {
-              return (window as any).location.href;
-            }
-            return null;
-          });
-          if (finalUrl) logger.info(`[CRYPTO] URL from meta/JS: ${finalUrl}`);
-        } catch (e) {
-          logger.warn(`[CRYPTO] Failed meta/JS extraction:`, {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      // STRATEGY 5: Extended wait for slow JS to complete
-      if (!finalUrl || finalUrl === "about:blank") {
-        const timeRemaining = TOTAL_TIMEOUT - (Date.now() - startTime);
-        if (timeRemaining > 2000) {
-          logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Extended Wait)...`);
-          await updateProgress("Waiting for page to fully load...");
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          try {
-            finalUrl = await page.evaluate(() => {
-              return window.location.href;
-            });
-            if (finalUrl && finalUrl !== "about:blank") {
-              logger.info(`[CRYPTO] URL from extended wait: ${finalUrl}`);
-            }
-          } catch (e) {
-            logger.warn(`[CRYPTO] Extended wait extraction failed`);
-          }
-        }
-      }
-
-      // Success - return immediately
-      if (finalUrl && finalUrl !== "about:blank") {
+      // Verify we got a different URL (with paymentId added)
+      if (finalUrl && finalUrl !== invoiceUrl && finalUrl !== "about:blank") {
         logger.info(`[CRYPTO] ✓ Payment URL successfully fetched within ${Date.now() - startTime}ms`, {
           url: finalUrl.substring(0, 150),
+          initialUrl: invoiceUrl.substring(0, 100),
         });
         return finalUrl;
       }
 
-      // Log failure for this attempt
+      // If URL didn't change, JS might not have run. Try again with longer wait
+      logger.warn(`[CRYPTO] URL didn't change after JS execution, trying extended wait...`);
+      await updateProgress("Waiting for JavaScript to complete...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const finalUrlRetry = page.url();
+      logger.info(`[CRYPTO] Final URL after extended wait:`, {
+        url: finalUrlRetry.substring(0, 150),
+        hasPaymentId: finalUrlRetry.includes("paymentId"),
+      });
+
+      if (finalUrlRetry && finalUrlRetry !== "about:blank") {
+        logger.info(`[CRYPTO] ✓ Payment URL successfully fetched (extended wait) within ${Date.now() - startTime}ms`, {
+          url: finalUrlRetry.substring(0, 150),
+        });
+        return finalUrlRetry;
+      }
+
+      // Last resort: Return what we have if it's valid
       lastError = new Error(
-        `[CRYPTO] All extraction strategies failed on attempt ${attempt}`
+        `[CRYPTO] Could not extract final URL with paymentId`
       );
-      logger.warn(`[CRYPTO] Attempt ${attempt} failed after ${Date.now() - startTime}ms`, {
-        strategies_tried: 5,
+      logger.warn(`[CRYPTO] Failed to extract final URL after ${Date.now() - startTime}ms`, {
+        lastUrl: finalUrlRetry.substring(0, 150),
       });
 
     } catch (error) {
