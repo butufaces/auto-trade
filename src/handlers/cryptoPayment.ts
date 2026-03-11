@@ -30,20 +30,43 @@ async function getOrCreateBrowser(launchOptions: any) {
  * Extract payment URL with multiple strategies and retry logic
  * Optimized for Telegram's 30-second callback timeout
  */
-async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
+async function fetchInvoiceUrl(
+  invoiceUrl: string,
+  ctx?: any,
+  messageData?: { amount?: string; cryptocurrency?: string }
+): Promise<string> {
   if (!invoiceUrl) throw new Error("[CRYPTO] Invoice URL is empty");
 
-  const MAX_RETRIES = 1; // Only 1 retry to stay within time limits
-  const TOTAL_TIMEOUT = 25000; // 25 seconds total (leave buffer for Telegram)
+  const MAX_RETRIES = 1;
+  const TOTAL_TIMEOUT = 28000;
   const startTime = Date.now();
   let lastError: Error | null = null;
+  let lastUpdateTime = startTime;
+  const UPDATE_INTERVAL = 4000; // Update message every 4 seconds
+
+  async function updateProgress(strategy: string) {
+    try {
+      if (!ctx || Date.now() - lastUpdateTime < UPDATE_INTERVAL) return;
+
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      let message = `⏳ <b>Fetching Payment Link</b>\n\n`;
+      message += `Status: ${strategy}\n`;
+      message += `Time: ${elapsed}s elapsed\n\n`;
+      if (messageData?.amount) message += `💰 ${messageData.amount}\n`;
+      if (messageData?.cryptocurrency) message += `💵 ${messageData.cryptocurrency}\n`;
+
+      await ctx.editMessageText(message, { parse_mode: "HTML" }).catch(() => {});
+      lastUpdateTime = Date.now();
+    } catch (e) {
+      logger.debug(`[CRYPTO] Failed to update progress message`);
+    }
+  }
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     let browser = null;
     let page = null;
     
     try {
-      // Check if we've exceeded total timeout
       if (Date.now() - startTime > TOTAL_TIMEOUT) {
         throw new Error("[CRYPTO] Total timeout exceeded");
       }
@@ -53,7 +76,8 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
         timeElapsed: Date.now() - startTime,
       });
 
-      // Detect platform and use appropriate browser
+      await updateProgress("Launching browser...");
+
       let launchOptions: any = {
         headless: true,
         args: [
@@ -67,7 +91,6 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       const fs = await import("fs");
 
       if (process.platform === "linux") {
-        // Oracle Cloud - use system Chromium
         launchOptions.executablePath = "/usr/bin/chromium";
         logger.info(`[CRYPTO] Using Oracle Cloud system Chromium at /usr/bin/chromium`);
       } else if (process.platform === "win32") {
@@ -90,25 +113,27 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       browser = await getOrCreateBrowser(launchOptions);
       page = await browser.newPage();
 
-      page.setDefaultNavigationTimeout(15000);
-      page.setDefaultTimeout(15000);
+      page.setDefaultNavigationTimeout(25000);
+      page.setDefaultTimeout(25000);
 
-      // Navigate to invoice page with shorter timeout
+      await updateProgress("Connecting to payment processor...");
+
       logger.info(`[CRYPTO] Navigating to invoice page...`);
       const response = await page.goto(invoiceUrl, {
         waitUntil: "domcontentloaded",
-        timeout: 15000,
+        timeout: 25000,
       });
       logger.info(`[CRYPTO] Page loaded with status: ${response?.status()}`);
 
       // STRATEGY 1: Wait for URL change (quick timeout)
       logger.info(`[CRYPTO] Attempting URL extraction (Strategy 1: Navigation)...`);
+      await updateProgress("Checking for redirects...");
       let finalUrl: string | null = null;
 
       try {
         await Promise.race([
-          page.waitForNavigation({ timeout: 3000 }),
-          new Promise(resolve => setTimeout(resolve, 1000)),
+          page.waitForNavigation({ timeout: 5000 }),
+          new Promise(resolve => setTimeout(resolve, 2000)),
         ]);
         finalUrl = page.url();
         logger.info(`[CRYPTO] URL from navigation: ${finalUrl}`);
@@ -119,6 +144,7 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       // STRATEGY 2: Check window.location directly
       if (!finalUrl || finalUrl === "about:blank") {
         logger.info(`[CRYPTO] Attempting URL extraction (Strategy 2: window.location)...`);
+        await updateProgress("Extracting payment URL...");
         try {
           finalUrl = await page.evaluate(() => {
             if (window.location.href && window.location.href !== "about:blank") {
@@ -137,6 +163,7 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       // STRATEGY 3: Search for payment/checkout links in DOM (quick)
       if (!finalUrl || finalUrl === "about:blank") {
         logger.info(`[CRYPTO] Attempting URL extraction (Strategy 3: DOM Links)...`);
+        await updateProgress("Scanning page content...");
         try {
           finalUrl = await page.evaluate(() => {
             const selectors = [
@@ -171,6 +198,7 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
       // STRATEGY 4: Check for meta redirects (quick)
       if (!finalUrl || finalUrl === "about:blank") {
         logger.info(`[CRYPTO] Attempting URL extraction (Strategy 4: Meta/JS Redirects)...`);
+        await updateProgress("Processing redirects...");
         try {
           finalUrl = await page.evaluate(() => {
             const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
@@ -194,12 +222,13 @@ async function fetchInvoiceUrl(invoiceUrl: string): Promise<string> {
         }
       }
 
-      // STRATEGY 5: Short extended wait only if time permits
+      // STRATEGY 5: Extended wait for slow JS to complete
       if (!finalUrl || finalUrl === "about:blank") {
         const timeRemaining = TOTAL_TIMEOUT - (Date.now() - startTime);
-        if (timeRemaining > 3000) {
-          logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Short Wait)...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        if (timeRemaining > 2000) {
+          logger.info(`[CRYPTO] Attempting URL extraction (Strategy 5: Extended Wait)...`);
+          await updateProgress("Waiting for page to fully load...");
+          await new Promise(resolve => setTimeout(resolve, 3000));
           
           try {
             finalUrl = await page.evaluate(() => {
@@ -786,7 +815,10 @@ async function createCryptoPayment(
       if (finalPaymentUrl) {
         try {
           logger.info(`[CRYPTO] Starting invoice URL fetch with Puppeteer...`);
-          const extractedUrl = await fetchInvoiceUrl(finalPaymentUrl);
+          const extractedUrl = await fetchInvoiceUrl(finalPaymentUrl, ctx, {
+            amount: formatCurrency(investment.amount),
+            cryptocurrency: cryptocurrency.toUpperCase(),
+          });
           
           logger.info(`[CRYPTO] Final payment URL extracted successfully:`, {
             url: extractedUrl.substring(0, 100),
