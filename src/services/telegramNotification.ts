@@ -220,7 +220,7 @@ export class TelegramNotificationService {
       message += `🪙 Cryptocurrency: ${withdrawal?.cryptocurrency?.toUpperCase() || "USDT"}\n`;
       message += `⛓️ Blockchain: ${withdrawal?.blockchain?.toUpperCase() || "PENDING"}\n`;
       if (withdrawal?.walletAddress) {
-        message += `💳 Wallet: <code>${withdrawal.walletAddress.substring(0, 30)}...</code>\n`;
+        message += `💳 Wallet Address:\n<code>${withdrawal.walletAddress}</code>\n`;
       } else {
         message += `⚠️ Wallet: PENDING\n`;
       }
