@@ -1669,16 +1669,20 @@ export async function handleSettings(ctx: SessionContext): Promise<void> {
     return;
   }
 
+  // Check if user has any wallets
+  const wallets = await (prisma as any).wallet.findMany({
+    where: { userId: ctx.session.userId },
+  });
+
   const message = `<b>⚙️ Settings</b>\n\n
 📋 <b>Account Info:</b>
 • Name: ${user.firstName} ${user.lastName}
-• Username: ${user.username || "Not set"}
 • Email: ${user.email || "Not set"}
 • Email Status: ${user.emailVerified ? "✅ Verified" : "⏳ Pending"}
 • Phone: ${user.phoneNumber || "Not set"}
 • Status: <b>${user.status}</b>
 
-💳 <b>Wallet Address:</b> ${user.bankDetails ? "✅ Added" : "❌ Not added"}
+💳 <b>Wallet Address:</b> ${wallets.length > 0 ? `✅ Added (${wallets.length})` : "❌ Not added"}
 
 🎁 <b>Referral Program:</b>
 • Your Code: <code>${user.referralCode}</code>
@@ -1698,11 +1702,18 @@ Choose an option:`;
  */
 export async function handleSecurity(ctx: SessionContext): Promise<void> {
   logger.info(`📄 PAGE SHOWN: Security Settings`);
+  const user = await UserService.getUserById(ctx.session.userId);
+  
+  // Check if user has any wallets
+  const wallets = await (prisma as any).wallet.findMany({
+    where: { userId: ctx.session.userId },
+  });
+  
   const message = `<b>🔐 Security Settings</b>\n\n
 <b>Account Security:</b>
 🔒 Your account is protected with secure authentication
-📧 Email verification: ${(await UserService.getUserById(ctx.session.userId))?.emailVerified ? "✅ Enabled" : "⏳ Pending"}
-💳 Wallet address: ${(await UserService.getUserById(ctx.session.userId))?.bankDetails ? "✅ Saved" : "❌ Not added"}
+📧 Email verification: ${user?.emailVerified ? "✅ Enabled" : "⏳ Pending"}
+💳 Wallet address: ${wallets.length > 0 ? "✅ Saved" : "❌ Not added"}
 
 <b>Data Management:</b>
 You can export your account data or create a backup for security purposes.

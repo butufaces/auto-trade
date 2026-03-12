@@ -163,8 +163,8 @@ export async function handleAdminMarkWithdrawalPaid(
         status: "COMPLETED",
         approvedAt: new Date(),
         approvedBy: ctx.session.userId,
+        completedAt: new Date(),
         paymentStatus: "COMPLETED",
-        paidAt: new Date(),
       },
     });
 
