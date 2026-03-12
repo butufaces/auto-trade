@@ -671,6 +671,12 @@ export class InvestmentService {
       include: { user: true, investment: { include: { package: true } } },
     });
 
+    // Update investment status to PAYOUT_REQUESTED when withdrawal is initiated
+    await prisma.investment.update({
+      where: { id: investmentId },
+      data: { status: "PAYOUT_REQUESTED" },
+    });
+
     logger.info(`Withdrawal request created: ${withdrawalRequest.id} for amount ${amount}, token stored: ${withdrawalRequest.emailVerificationToken ? "yes" : "NO"}`);
     return withdrawalRequest;
   }

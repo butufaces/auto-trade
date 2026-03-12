@@ -148,12 +148,34 @@ export async function handleAdminMarkWithdrawalPaid(
   try {
     const withdrawal = await (prisma as any).withdrawalRequest.findUnique({
       where: { id: withdrawalId },
-      include: { user: true },
+      include: { user: true, investment: true },
     });
 
     if (!withdrawal) {
       await ctx.reply("❌ Withdrawal not found.");
       return;
+    }
+
+    // Check if withdrawal is already completed
+    if (withdrawal.status === "COMPLETED") {
+      await ctx.reply("⚠️ This withdrawal has already been marked as paid.");
+      return;
+    }
+
+    // Update investment: deduct amount and change status to COMPLETED
+    if (withdrawal.investmentId && withdrawal.status !== "COMPLETED") {
+      await (prisma as any).investment.update({
+        where: { id: withdrawal.investmentId },
+        data: {
+          totalWithdrawn: {
+            increment: withdrawal.amount,
+          },
+          availableWithdrawable: {
+            decrement: withdrawal.amount,
+          },
+          status: "COMPLETED",
+        },
+      });
     }
 
     // Update withdrawal status to COMPLETED
@@ -167,6 +189,10 @@ export async function handleAdminMarkWithdrawalPaid(
         paymentStatus: "COMPLETED",
       },
     });
+
+    // Update user stats to reflect the withdrawal
+    const { UserService } = await import("../services/user.js");
+    await UserService.updateUserStats(withdrawal.userId);
 
     // Notify user of payment
     try {
@@ -193,12 +219,14 @@ export async function handleAdminMarkWithdrawalPaid(
       logger.warn("Failed to send withdrawal notification to user:", notifyErr);
     }
 
+    const { formatCurrency } = await import("../lib/helpers.js");
     const message = `✅ <b>Withdrawal Marked as Paid!</b>\n\n
 Withdrawal ID: <code>${withdrawalId}</code>\n
 Amount: ${formatCurrency(withdrawal.amount)}\n
 Blockchain: ${withdrawal.blockchain || "N/A"}\n
 User: @${withdrawal.user?.username || "Unknown"}\n\n
 📧 User notification sent!\n
+Investment amount has been deducted.\n
 They will see the payment in their wallet shortly.`;
 
     await ctx.editMessageText(message, {
@@ -277,6 +305,19 @@ export async function handleAdminRejectWithdrawalReason(ctx: SessionContext): Pr
 
     const rejectionReason = ctx.message?.text || "No reason provided";
 
+    const withdrawal = await (prisma as any).withdrawalRequest.findUnique({
+      where: { id: withdrawalId },
+      include: { user: true, investment: true },
+    });
+
+    // Reset investment status back to MATURED so user can withdraw again
+    if (withdrawal.investmentId) {
+      await (prisma as any).investment.update({
+        where: { id: withdrawal.investmentId },
+        data: { status: "MATURED" },
+      });
+    }
+
     await (prisma as any).withdrawalRequest.update({
       where: { id: withdrawalId },
       data: {
@@ -284,11 +325,6 @@ export async function handleAdminRejectWithdrawalReason(ctx: SessionContext): Pr
         rejectionReason,
         updatedAt: new Date(),
       },
-    });
-
-    const withdrawal = await (prisma as any).withdrawalRequest.findUnique({
-      where: { id: withdrawalId },
-      include: { user: true },
     });
 
     // Notify user of rejection
