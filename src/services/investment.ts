@@ -590,6 +590,18 @@ export class InvestmentService {
       );
     }
 
+    // Check if user has any pending withdrawal across all investments
+    const anyPendingWithdrawal = await prisma.withdrawalRequest.findFirst({
+      where: {
+        userId,
+        status: { in: ["PENDING", "PROCESSING", "APPROVED"] },
+      },
+    });
+
+    if (anyPendingWithdrawal) {
+      throw new Error("You already have a pending withdrawal. Please wait for approval or rejection before initiating a new withdrawal.");
+    }
+
     // Get user for bank details
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -905,6 +917,42 @@ export class InvestmentService {
         createdAt: "desc",
       },
     });
+  }
+
+  /**
+   * Check if user has any pending withdrawal (blocks new withdrawals)
+   */
+  static async hasPendingWithdrawal(userId: string) {
+    const pendingWithdrawal = await prisma.withdrawalRequest.findFirst({
+      where: {
+        userId,
+        status: {
+          in: ["PENDING", "PROCESSING", "APPROVED"],
+        },
+      },
+    });
+
+    return !!pendingWithdrawal;
+  }
+
+  /**
+   * Get pending withdrawal details for user (if exists)
+   */
+  static async getPendingWithdrawalDetails(userId: string) {
+    const pendingWithdrawal = await prisma.withdrawalRequest.findFirst({
+      where: {
+        userId,
+        status: {
+          in: ["PENDING", "PROCESSING", "APPROVED"],
+        },
+      },
+      include: {
+        investment: { include: { package: true } },
+        user: true,
+      },
+    });
+
+    return pendingWithdrawal;
   }
 }
 

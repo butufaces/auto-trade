@@ -16,6 +16,7 @@ import prisma from "./db/client.js";
 import PaymentAccountService from "./services/paymentAccount.js";
 import PackageService from "./services/package.js";
 import UserService from "./services/user.js";
+import InvestmentService from "./services/investment.js";
 
 import {
   ensureUserExists,
@@ -1254,6 +1255,17 @@ bot.on("callback_query", async (ctx) => {
       return handleStart(ctx);
     }
 
+    // Pending withdrawal notice
+    if (data === "has_pending_withdrawal") {
+      const pendingWithdrawalDetails = await InvestmentService.getPendingWithdrawalDetails(ctx.session.userId);
+      if (pendingWithdrawalDetails) {
+        const message = `⏳ <b>Pending Withdrawal Active</b>\n\n⚠️ You cannot make a new withdrawal until your current pending request is completed.\n\n<b>Details:</b>\n• Amount: ${formatCurrency(pendingWithdrawalDetails.amount)}\n• Status: ${pendingWithdrawalDetails.status}\n• Request ID: <code>${pendingWithdrawalDetails.id}</code>`;
+        await ctx.answerCallbackQuery();
+        await ctx.reply(message, { parse_mode: "HTML" });
+      }
+      return;
+    }
+
     // SPECIFIC WITHDRAW HANDLERS - MUST BE BEFORE GENERIC "withdraw_" HANDLER
     if (data.startsWith("withdraw_investment_input_")) {
       const investmentId = data.replace("withdraw_investment_input_", "").trim();
@@ -2403,6 +2415,17 @@ ${verifiedWithdrawal.bankDetails || "Not provided"}
             await bot.api.sendMessage(adminId.toString(), adminMessage, { parse_mode: "HTML" });
           } catch (error) {
             logger.error(`Failed to notify admin ${adminId}:`, error);
+          }
+        }
+
+        // Send confirmation message to user via Telegram
+        if (user && user.telegramId) {
+          try {
+            const userMessage = `✅ <b>Withdrawal Request Verified!</b>\n\n💰 Amount: <b>${formatCurrency(verifiedWithdrawal.amount)}</b>\n\n📋 Your withdrawal request has been verified and sent to our administration team for approval.\n\n⏳ <b>Status:</b> Pending Admin Review\n\nYou will receive a notification as soon as a decision is made.\n\n<i>Withdrawal ID: ${verifiedWithdrawal.id}</i>`;
+            await bot.api.sendMessage(Number(user.telegramId), userMessage, { parse_mode: "HTML" });
+            logger.info(`Withdrawal verification confirmation sent to user ${user.id}`);
+          } catch (error) {
+            logger.error(`Failed to send user notification for withdrawal verification:`, error);
           }
         }
 

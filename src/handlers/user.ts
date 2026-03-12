@@ -469,6 +469,21 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
     const activeInvestments = investments.filter((inv: any) => inv.status === "ACTIVE");
     const maturedInvestments = investments.filter((inv: any) => inv.status === "MATURED");
     const completedInvestments = investments.filter((inv: any) => inv.status === "COMPLETED");
+    
+    // Check for pending withdrawal
+    const hasPending = await InvestmentService.hasPendingWithdrawal(profile.id);
+    const pendingWithdrawalDetails = hasPending ? await InvestmentService.getPendingWithdrawalDetails(profile.id) : null;
+    
+    // Show pending withdrawal warning
+    if (hasPending && pendingWithdrawalDetails) {
+      message += `<b>💼 Your Investment Portfolio</b>\n\n`;
+      message += `⏳ <b>PENDING WITHDRAWAL</b>\n`;
+      message += `Amount: ${formatCurrency(pendingWithdrawalDetails.amount)}\n`;
+      message += `Status: ${pendingWithdrawalDetails.status}\n`;
+      message += `Request ID: <code>${pendingWithdrawalDetails.id}</code>\n\n`;
+      message += `⚠️ <i>You have a pending withdrawal. No new withdrawals can be made until this is completed.</i>\n\n`;
+      message += `━━━━━━━━━━━━━━━\n\n`;
+    }
 
     message += `<b>🔵 Active Investments: ${activeInvestments.length}</b>\n`;
     if (activeInvestments.length === 0) {
@@ -632,16 +647,27 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
       parse_mode: "HTML",
     });
 
+    // Check for pending withdrawal
+    const userId = ctx.session.userId;
+    const hasPendingWithdrawal = await InvestmentService.hasPendingWithdrawal(userId);
+
     // Show withdrawal options
     const { InlineKeyboard } = await import("grammy");
     const keyboard = new InlineKeyboard();
 
-    // Withdraw investment button (only if matured)
+    // Withdraw investment button (only if matured and no pending withdrawal)
     if (investment.status === "MATURED") {
-      keyboard.text(
-        `🏦 Withdraw Investment (${formatCurrency(investment.amount + investment.totalProfit)})`,
-        `withdraw_investment_input_${trimmedId}`
-      );
+      if (hasPendingWithdrawal) {
+        keyboard.text(
+          `🔒 Withdraw (Pending Withdrawal Active)`,
+          "has_pending_withdrawal"
+        );
+      } else {
+        keyboard.text(
+          `🏦 Withdraw Investment (${formatCurrency(investment.amount + investment.totalProfit)})`,
+          `withdraw_investment_input_${trimmedId}`
+        );
+      }
       keyboard.row();
     } else {
       keyboard.text(
