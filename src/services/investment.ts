@@ -376,14 +376,15 @@ export class InvestmentService {
     const secondsElapsed = msElapsed / 1000;
 
     // Calculate profit accumulated since investment started
-    const profitAccumulatedSinceStart = dailyRate * daysElapsed;
+    // Cap at totalProfit to prevent exceeding expectedReturn
+    const profitAccumulatedSinceStart = Math.min(totalProfit, dailyRate * daysElapsed);
 
     // Combined current value
     const currentValue = investment.amount + investment.totalAccruedProfit + profitAccumulatedSinceStart;
 
-    // Time remaining
+    // Time remaining (use floor for consistency with daysElapsed calculation)
     const msRemaining = maturityDate.getTime() - now.getTime();
-    const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+    const daysRemaining = Math.max(0, Math.floor(msRemaining / (1000 * 60 * 60 * 24)));
 
     // Rates per time unit
     const hourlyRate = dailyRate / 24;
