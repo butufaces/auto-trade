@@ -655,8 +655,12 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     const { InlineKeyboard } = await import("grammy");
     const keyboard = new InlineKeyboard();
 
-    // Withdraw investment button (only if matured and no pending withdrawal)
-    if (investment.status === "MATURED") {
+    // Withdraw investment button - only show for MATURED investments
+    if (investment.status === "COMPLETED") {
+      // Investment already fully withdrawn - no withdraw button
+      keyboard.text("✅ Already Withdrawn", "noop");
+      keyboard.row();
+    } else if (investment.status === "MATURED") {
       if (hasPendingWithdrawal) {
         keyboard.text(
           `🔒 Withdraw (Pending Withdrawal Active)`,
@@ -670,6 +674,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
       }
       keyboard.row();
     } else {
+      // Investment not yet matured
       keyboard.text(
         `⏱️ Withdraw Investment (Matures on ${new Date(investment.maturityDate).toLocaleDateString()})`,
         "investment_not_matured"
