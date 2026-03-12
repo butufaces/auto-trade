@@ -5,7 +5,7 @@ import { formatCurrency } from "../lib/helpers.js";
  * Main Menu Keyboard
  */
 export const mainMenuKeyboard = new Keyboard()
-  .text("� Begin Trading")
+  .text("🚀 Begin Trading")
   .text("📊 My Portfolio")
   .row()
   .text("💳 My Wallet")
@@ -204,6 +204,71 @@ export function createPackageKeyboard(
 }
 
 /**
+ * Generate rounded amount options between min and max
+ * Examples:
+ * - $20 to $200: [$20, $50, $100, $200]
+ * - $100 to $5000: [$100, $1000, $2500, $5000]
+ * - $1000 to $50000: [$1000, $15000, $30000, $50000]
+ */
+function generateRoundedAmounts(
+  minAmount: number,
+  maxAmount: number
+): number[] {
+  const amounts: number[] = [minAmount];
+
+  if (minAmount === maxAmount) {
+    return amounts;
+  }
+
+  const range = maxAmount - minAmount;
+
+  // Determine appropriate step size based on range magnitude
+  let stepSize: number;
+  if (range < 100) {
+    stepSize = 10;
+  } else if (range < 500) {
+    stepSize = 25;
+  } else if (range < 2000) {
+    stepSize = 100;
+  } else if (range < 10000) {
+    stepSize = 500;
+  } else if (range < 100000) {
+    stepSize = 5000;
+  } else {
+    stepSize = 50000;
+  }
+
+  // Generate intermediate amounts
+  let current = minAmount + stepSize;
+  while (current < maxAmount) {
+    // Round to the nearest step size
+    const rounded = Math.round(current / stepSize) * stepSize;
+    if (rounded > minAmount && rounded < maxAmount && !amounts.includes(rounded)) {
+      amounts.push(rounded);
+    }
+    current += stepSize;
+  }
+
+  // Always add max amount as the last option
+  if (!amounts.includes(maxAmount)) {
+    amounts.push(maxAmount);
+  }
+
+  // Limit to 4 options (min + 2 intermediate + max)
+  if (amounts.length > 4) {
+    const result = [amounts[0]]; // Keep min
+    const step = Math.floor((amounts.length - 2) / 2);
+    for (let i = 1; i < amounts.length - 1; i += step) {
+      result.push(amounts[i]);
+    }
+    result.push(amounts[amounts.length - 1]); // Keep max
+    return result;
+  }
+
+  return amounts;
+}
+
+/**
  * Create amount selection keyboard
  */
 export function createAmountKeyboard(
@@ -212,10 +277,9 @@ export function createAmountKeyboard(
   packageId: string
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
-  const increment = Math.floor((maxAmount - minAmount) / 4);
+  const amounts = generateRoundedAmounts(minAmount, maxAmount);
 
-  for (let i = 0; i < 4; i++) {
-    const amount = minAmount + increment * i;
+  for (const amount of amounts) {
     keyboard.text(
       formatCurrency(amount),
       `select_amount_${packageId}_${amount}`

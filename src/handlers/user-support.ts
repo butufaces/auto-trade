@@ -44,6 +44,13 @@ How can we help you?`;
  */
 export async function handleNewComplaint(ctx: SessionContext): Promise<void> {
   try {
+    // Initialize fresh support data
+    ctx.session.supportData = {
+      subject: "",
+      description: "",
+      priority: "MEDIUM",
+      attachmentUrls: [],
+    };
     ctx.session.supportStep = "enter_subject";
 
     await ctx.reply(
@@ -54,7 +61,7 @@ Please enter the <b>subject/title</b> of your complaint:`,
     );
   } catch (error) {
     logger.error("Error starting complaint:", error);
-    await ctx.reply("❌ Error", { reply_markup: mainMenuKeyboard });
+    await ctx.reply("❌ Error starting complaint creation. Please try again.", { reply_markup: mainMenuKeyboard });
   }
 }
 
@@ -141,8 +148,13 @@ What is the priority of your issue?`,
  */
 export async function handleComplaintPriority(ctx: SessionContext, priority: string): Promise<void> {
   try {
-    ctx.session.supportData!.priority = priority;
-    ctx.session.supportData!.attachmentUrls = []; // Initialize file array
+    // Validate and initialize supportData if missing
+    if (!ctx.session.supportData) {
+      ctx.session.supportData = {};
+    }
+
+    ctx.session.supportData.priority = priority;
+    ctx.session.supportData.attachmentUrls = []; // Initialize file array
     ctx.session.supportStep = "upload_files";
 
     const { subject, description } = ctx.session.supportData;
@@ -169,7 +181,7 @@ Simply send files by tapping the attachment icon, or say <b>done</b> to continue
     );
   } catch (error) {
     logger.error("Error processing priority:", error);
-    await ctx.reply("❌ Error", { reply_markup: mainMenuKeyboard });
+    await ctx.reply("❌ Error selecting priority. Please try again.", { reply_markup: mainMenuKeyboard });
   }
 }
 
@@ -178,6 +190,16 @@ Simply send files by tapping the attachment icon, or say <b>done</b> to continue
  */
 export async function handleReadyToConfirm(ctx: SessionContext): Promise<void> {
   try {
+    // Validate supportData exists and has required fields
+    if (!ctx.session.supportData || !ctx.session.supportData.subject || !ctx.session.supportData.description) {
+      logger.warn("Invalid supportData when confirming:", ctx.session.supportData);
+      await ctx.reply(
+        "❌ Invalid ticket data. Please start over.",
+        { reply_markup: mainMenuKeyboard }
+      );
+      return;
+    }
+
     ctx.session.supportStep = "confirm_before_submit";
 
     const { subject, description, priority, attachmentUrls } = ctx.session.supportData;
@@ -193,7 +215,7 @@ export async function handleReadyToConfirm(ctx: SessionContext): Promise<void> {
 
 <b>Description:</b> ${description}
 
-<b>Priority:</b> ${priority}${fileInfo}
+<b>Priority:</b> ${priority || "MEDIUM"}${fileInfo}
 
 Ready to submit?`,
       {
@@ -208,7 +230,7 @@ Ready to submit?`,
     );
   } catch (error) {
     logger.error("Error preparing confirmation:", error);
-    await ctx.reply("❌ Error", { reply_markup: mainMenuKeyboard });
+    await ctx.reply("❌ Error reviewing ticket. Please try again.", { reply_markup: mainMenuKeyboard });
   }
 }
 
@@ -345,14 +367,23 @@ export async function handleSubmitComplaint(ctx: SessionContext): Promise<void> 
     }
 
     // Send Telegram message to all admins (DB admins + fallback to ADMIN_IDS / ADMIN_CHAT_ID)
+    let adminNotificationCount = 0;
     try {
       const targets = new Set<string>();
 
       // Add admins from DB who have telegramId
       try {
         const admins = await prisma.user.findMany({ where: { isAdmin: true } });
+        if (admins.length === 0) {
+          logger.warn(`⚠️ No admin users found in database`);
+        }
         for (const admin of admins) {
-          if (admin.telegramId) targets.add(admin.telegramId.toString());
+          if (admin.telegramId) {
+            targets.add(admin.telegramId.toString());
+            logger.info(`Added admin ${admin.firstName} (${admin.telegramId}) from DB`);
+          } else {
+            logger.warn(`Admin ${admin.firstName} has no telegramId set`);
+          }
         }
       } catch (err) {
         logger.warn("Could not load admins from DB for notifications:", err);
@@ -361,9 +392,14 @@ export async function handleSubmitComplaint(ctx: SessionContext): Promise<void> 
       // Add ADMIN_IDS from env (comma-separated list)
       try {
         const envAdminIds = (config.ADMIN_IDS || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-        for (const id of envAdminIds) targets.add(id);
         if (envAdminIds.length > 0) {
-          logger.info(`Loaded ${envAdminIds.length} admin IDs from environment`);
+          for (const id of envAdminIds) {
+            targets.add(id);
+            logger.info(`Added admin ID from ADMIN_IDS env: ${id}`);
+          }
+          logger.info(`Loaded ${envAdminIds.length} admin ID(s) from ADMIN_IDS environment variable`);
+        } else {
+          logger.warn("ADMIN_IDS environment variable is empty");
         }
       } catch (err) {
         logger.error("Error loading ADMIN_IDS from config:", err);
@@ -374,14 +410,16 @@ export async function handleSubmitComplaint(ctx: SessionContext): Promise<void> 
         const adminChatId = config.ADMIN_CHAT_ID;
         if (adminChatId) {
           targets.add(adminChatId.toString());
-          logger.info(`Loaded ADMIN_CHAT_ID from environment: ${adminChatId}`);
+          logger.info(`Added ADMIN_CHAT_ID from environment: ${adminChatId}`);
+        } else {
+          logger.warn("ADMIN_CHAT_ID environment variable is not set");
         }
       } catch (err) {
         logger.error("Error loading ADMIN_CHAT_ID from config:", err);
       }
 
       if (targets.size === 0) {
-        logger.warn("No admin targets configured - skipping Telegram admin notifications for support ticket");
+        logger.error("❌ NO ADMIN NOTIFICATION TARGETS CONFIGURED - New support tickets will NOT notify admins. Please set ADMIN_IDS, ADMIN_CHAT_ID, or ensure admins have telegramId in database.");
       } else {
         const messageText = `📞 <b>New Support Ticket</b>\n\n<b>From:</b> ${user?.firstName} ${user?.lastName || ""}\n<b>Ticket ID:</b> <code>${ticket.id}</code>\n<b>Subject:</b> ${subject}\n<b>Priority:</b> ${priority || "MEDIUM"}`;
 
@@ -401,14 +439,16 @@ export async function handleSubmitComplaint(ctx: SessionContext): Promise<void> 
                 }
               }
             );
-            logger.info(`Sent Telegram support notification to admin chat ${target}`);
+            adminNotificationCount++;
+            logger.info(`✅ Sent Telegram support notification to admin ${target}`);
           } catch (err) {
-            logger.error(`Failed to send Telegram support notification to ${target}:`, err);
+            logger.error(`❌ Failed to send Telegram support notification to ${target}:`, err);
           }
         }
+        logger.info(`📊 Admin notifications sent: ${adminNotificationCount}/${targets.size} targets`);
       }
     } catch (error) {
-      logger.error("Error sending Telegram messages to admins:", error);
+      logger.error("Error in admin notification process:", error);
     }
 
     // Notify all admins about new complaint (in-app)

@@ -1830,31 +1830,46 @@ When they use your code during registration, you'll earn a bonus from their inve
 // ==================== WELCOME MEDIA HANDLERS ====================
 
 // Handle photo uploads for welcome media
-bot.on("message:photo", requireAdmin, async (ctx, next) => {
+bot.on("message:photo", async (ctx, next) => {
   if (ctx.session.managingWelcomeMedia) {
+    // Check admin status for welcome media management
+    if (!isAdmin(BigInt(ctx.from?.id || 0))) {
+      await ctx.reply("❌ You don't have permission to manage welcome media");
+      return;
+    }
     await handleWelcomeMediaPhoto(ctx);
   } else {
-    // Not managing welcome media, let other handlers process this
+    // Not managing welcome media, let other handlers process this (support tickets, etc.)
     await next();
   }
 });
 
 // Handle video uploads for welcome media
-bot.on("message:video", requireAdmin, async (ctx, next) => {
+bot.on("message:video", async (ctx, next) => {
   if (ctx.session.managingWelcomeMedia) {
+    // Check admin status for welcome media management
+    if (!isAdmin(BigInt(ctx.from?.id || 0))) {
+      await ctx.reply("❌ You don't have permission to manage welcome media");
+      return;
+    }
     await handleWelcomeMediaVideo(ctx);
   } else {
-    // Not managing welcome media, let other handlers process this
+    // Not managing welcome media, let other handlers process this (support tickets, etc.)
     await next();
   }
 });
 
 // Handle animation (GIF) uploads for welcome media
-bot.on("message:animation", requireAdmin, async (ctx, next) => {
+bot.on("message:animation", async (ctx, next) => {
   if (ctx.session.managingWelcomeMedia) {
+    // Check admin status for welcome media management
+    if (!isAdmin(BigInt(ctx.from?.id || 0))) {
+      await ctx.reply("❌ You don't have permission to manage welcome media");
+      return;
+    }
     await handleWelcomeMediaAnimation(ctx);
   } else {
-    // Not managing welcome media, let other handlers process this
+    // Not managing welcome media, let other handlers process this (support tickets, etc.)
     await next();
   }
 });
