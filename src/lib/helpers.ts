@@ -90,11 +90,19 @@ export function calculateExpectedReturn(
  * Calculate maturity date
  * @param durationDays - Number of days for investment
  * @param startDate - Optional start date (defaults to now). If provided, maturity is calculated from this exact time
+ * 
+ * IMPORTANT: Calculates maturity to the EXACT time, not just the date.
+ * Example: If activated at 10 PM on Mar 12, a 30-day investment matures at 10 PM on Apr 11
  */
 export function calculateMaturityDate(durationDays: number, startDate?: Date): Date {
   const baseDate = startDate ? new Date(startDate) : new Date();
-  baseDate.setDate(baseDate.getDate() + durationDays);
-  return baseDate;
+  
+  // Calculate by adding exactly durationDays * 24 hours in milliseconds
+  // This preserves the exact time of day (hour, minute, second)
+  const millisPerDay = 24 * 60 * 60 * 1000;
+  const maturityTime = baseDate.getTime() + (durationDays * millisPerDay);
+  
+  return new Date(maturityTime);
 }
 
 /**

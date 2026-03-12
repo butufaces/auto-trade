@@ -467,32 +467,81 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
 
     const investments = await InvestmentService.getInvestmentsByUser(profile.id);
     const activeInvestments = investments.filter((inv: any) => inv.status === "ACTIVE");
+    const maturedInvestments = investments.filter((inv: any) => inv.status === "MATURED");
+    const completedInvestments = investments.filter((inv: any) => inv.status === "COMPLETED");
 
-    message += `<b>Active Investments: ${activeInvestments.length}</b>\n`;
+    message += `<b>🔵 Active Investments: ${activeInvestments.length}</b>\n`;
     if (activeInvestments.length === 0) {
       message += "No active investments yet. Start investing now! 🚀\n";
+    }
+
+    if (maturedInvestments.length > 0) {
+      message += `\n<b>🟢 Matured & Ready for Withdrawal: ${maturedInvestments.length}</b>\n`;
+      for (const inv of maturedInvestments) {
+        message += `  💰 ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)} ready\n`;
+      }
+    }
+
+    if (completedInvestments.length > 0) {
+      message += `\n<b>✅ Completed Investments: ${completedInvestments.length}</b>\n`;
+      for (const inv of completedInvestments) {
+        message += `  ✓ ${inv.package.name} - Withdrawn: ${formatCurrency(inv.amount + inv.totalProfit)}\n`;
+      }
     }
 
     await ctx.reply(message, {
       parse_mode: "HTML",
     });
 
-    // Show investment buttons
-    if (activeInvestments.length > 0) {
+    // Show investment buttons - ALL investments (active, matured, completed)
+    const allInvestmentsWithButtons = [...activeInvestments, ...maturedInvestments, ...completedInvestments];
+    if (allInvestmentsWithButtons.length > 0) {
       const { InlineKeyboard } = await import("grammy");
       const keyboard = new InlineKeyboard();
 
-      for (const inv of activeInvestments) {
-        keyboard.text(
-          `${inv.package.icon} ${inv.package.name} - ${formatCurrency(inv.amount)}`,
-          `view_investment_${inv.id}`
-        );
+      // Active investments
+      if (activeInvestments.length > 0) {
+        keyboard.text("🔵 ACTIVE INVESTMENTS", "noop");
         keyboard.row();
+        for (const inv of activeInvestments) {
+          const statusEmoji = "🟢";
+          keyboard.text(
+            `${statusEmoji} ${inv.package.name} - ${formatCurrency(inv.amount)}`,
+            `view_investment_${inv.id}`
+          );
+          keyboard.row();
+        }
       }
 
-      keyboard.text("🔙 Back", "main_menu");
+      // Matured investments
+      if (maturedInvestments.length > 0) {
+        keyboard.text("🟢 MATURED (Ready to Withdraw)", "noop");
+        keyboard.row();
+        for (const inv of maturedInvestments) {
+          keyboard.text(
+            `✨ ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)}`,
+            `view_investment_${inv.id}`
+          );
+          keyboard.row();
+        }
+      }
 
-      await ctx.reply("Select an investment to view details:", {
+      // Completed investments
+      if (completedInvestments.length > 0) {
+        keyboard.text("✅ COMPLETED", "noop");
+        keyboard.row();
+        for (const inv of completedInvestments) {
+          keyboard.text(
+            `✓ ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)}`,
+            `view_investment_${inv.id}`
+          );
+          keyboard.row();
+        }
+      }
+
+      keyboard.text("🔙 Back", "back_to_menu");
+
+      await ctx.reply("📊 All Your Investments:", {
         reply_markup: keyboard,
       });
     }
@@ -552,15 +601,32 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     if (trackingInfo) {
       message += `Current Value: ${formatCurrency(trackingInfo.currentValue)}\n`;
       message += `Accrued Profit: ${formatCurrency(trackingInfo.totalProfit || 0)}\n`;
-      message += `Daily Profit: +${formatCurrency(trackingInfo.dailyProfit)}\n`;
-      message += `Days Remaining: ${trackingInfo.daysRemaining} days\n`;
+      if (investment.status === "ACTIVE") {
+        message += `Daily Profit: +${formatCurrency(trackingInfo.dailyProfit)}\n`;
+        message += `Days Remaining: ${trackingInfo.daysRemaining} days\n`;
+      }
     }
     message += `Created: ${new Date(investment.createdAt).toLocaleDateString()}\n`;
     message += `Maturity Date: ${new Date(investment.maturityDate).toLocaleDateString()}\n\n`;
 
-    message += `<b>� STATUS</b>\n`;
-    message += `Investment is locked until maturity date.\n`;
-    message += `Full withdrawal available on maturity.\n`;
+    // Status-specific messages
+    if (investment.status === "ACTIVE") {
+      message += `<b>🔄 ACTIVE</b>\n`;
+      message += `Investment is earning daily profit.\n`;
+      message += `Full withdrawal available on maturity date.\n`;
+    } else if (investment.status === "MATURED") {
+      message += `<b>🟢 MATURED - READY FOR WITHDRAWAL</b>\n`;
+      message += `Your investment has reached maturity!\n`;
+      message += `Available to withdraw: ${formatCurrency(investment.amount + investment.totalAccruedProfit)}\n`;
+      message += `(Principal + All Earned Profit)\n`;
+    } else if (investment.status === "COMPLETED") {
+      message += `<b>✅ COMPLETED</b>\n`;
+      message += `This investment has been successfully withdrawn.\n`;
+    } else {
+      message += `<b>📋 ${investment.status}</b>\n`;
+      message += `Investment is locked until maturity date.\n`;
+      message += `Full withdrawal available on maturity.\n`;
+    }
 
     await ctx.reply(message, {
       parse_mode: "HTML",
