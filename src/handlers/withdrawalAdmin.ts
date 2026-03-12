@@ -162,7 +162,15 @@ export async function handleAdminMarkWithdrawalPaid(
       return;
     }
 
-    // Update investment: deduct amount and change status to COMPLETED
+    // Determine if this is a full or partial withdrawal
+    const investment = withdrawal.investment || await (prisma as any).investment.findUnique({
+      where: { id: withdrawal.investmentId },
+    });
+
+    const isFullWithdrawal = investment && withdrawal.amount >= investment.availableWithdrawable;
+    const newInvestmentStatus = isFullWithdrawal ? "COMPLETED" : "MATURED";
+
+    // Update investment: deduct amount and update status based on withdrawal type
     if (withdrawal.investmentId && withdrawal.status !== "COMPLETED") {
       await (prisma as any).investment.update({
         where: { id: withdrawal.investmentId },
@@ -173,9 +181,23 @@ export async function handleAdminMarkWithdrawalPaid(
           availableWithdrawable: {
             decrement: withdrawal.amount,
           },
-          status: "COMPLETED",
+          status: newInvestmentStatus,
         },
       });
+
+      // Log withdrawal type
+      if (isFullWithdrawal) {
+        logger.info(`[WITHDRAWAL] Full withdrawal completed for investment ${withdrawal.investmentId}`, {
+          amount: withdrawal.amount,
+          status: newInvestmentStatus,
+        });
+      } else {
+        logger.info(`[WITHDRAWAL] Partial withdrawal completed for investment ${withdrawal.investmentId}`, {
+          withdrawnAmount: withdrawal.amount,
+          remainingBalance: investment.availableWithdrawable - withdrawal.amount,
+          status: newInvestmentStatus,
+        });
+      }
     }
 
     // Update withdrawal status to COMPLETED
@@ -226,7 +248,7 @@ Amount: ${formatCurrency(withdrawal.amount)}\n
 Blockchain: ${withdrawal.blockchain || "N/A"}\n
 User: @${withdrawal.user?.username || "Unknown"}\n\n
 📧 User notification sent!\n
-Investment amount has been deducted.\n
+Investment Status: ${isFullWithdrawal ? "✅ COMPLETED (Full Withdrawal)" : "⏳ MATURED (Partial Withdrawal)"}\n
 They will see the payment in their wallet shortly.`;
 
     await ctx.editMessageText(message, {
