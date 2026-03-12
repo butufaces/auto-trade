@@ -1222,6 +1222,38 @@ bot.on("callback_query", async (ctx) => {
       return handleInitiateCryptoPayment(ctx);
     }
 
+    // Missing handlers for common callbacks
+    if (data === "support") {
+      logNavigation("Crypto Payment", "Support Menu", ctx.session.userId);
+      return handleSupportMenu(ctx);
+    }
+
+    if (data === "menu") {
+      logNavigation("Feature", "Main Menu", ctx.session.userId);
+      return handleStart(ctx);
+    }
+
+    if (data === "my_investments") {
+      logNavigation("Feature", "My Portfolio", ctx.session.userId);
+      return handleViewPortfolio(ctx);
+    }
+
+    if (data === "invest") {
+      logNavigation("Notification", "Packages", ctx.session.userId);
+      return handleViewPackages(ctx);
+    }
+
+    if (data === "portfolio") {
+      logNavigation("Notification", "My Portfolio", ctx.session.userId);
+      return handleViewPortfolio(ctx);
+    }
+
+    // Generic cancel without investment ID
+    if (data === "cancel_investment") {
+      logNavigation("Feature", "Main Menu", ctx.session.userId);
+      return handleStart(ctx);
+    }
+
     // SPECIFIC WITHDRAW HANDLERS - MUST BE BEFORE GENERIC "withdraw_" HANDLER
     if (data.startsWith("withdraw_investment_input_")) {
       const investmentId = data.replace("withdraw_investment_input_", "").trim();
