@@ -1151,7 +1151,7 @@ Enter the amount you want to withdraw (or type "max" for all):`,
 }
 
 /**
- * Withdraw investment - Ask for amount (only when matured)
+ * Withdraw investment - First select wallet, then ask for amount
  */
 export async function handleWithdrawInvestmentInput(ctx: SessionContext, investmentId: string): Promise<void> {
   try {
@@ -1176,8 +1176,27 @@ export async function handleWithdrawInvestmentInput(ctx: SessionContext, investm
       return;
     }
 
-    const totalAmount = investment.amount + investment.totalProfit;
+    // Get user's wallets
+    const wallets = await (prisma as any).wallet.findMany({
+      where: { userId: ctx.session.userId },
+      orderBy: { isDefault: "desc" },
+    });
 
+    if (wallets.length === 0) {
+      await ctx.reply("❌ <b>No Wallets Found</b>\n\nPlease add a wallet first to withdraw earnings.", {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "➕ Add Wallet", callback_data: "add_wallet" }],
+            [{ text: "🔙 Back", callback_data: `invest_details_${trimmedId}` }],
+          ],
+        },
+      });
+      return;
+    }
+
+    // Store investment info in session for wallet selection
+    const totalAmount = investment.amount + investment.totalProfit;
     ctx.session.withdrawalData = {
       investmentId: trimmedId,
       availableAmount: totalAmount,
@@ -1187,17 +1206,68 @@ export async function handleWithdrawInvestmentInput(ctx: SessionContext, investm
       profit: investment.totalProfit,
     };
 
-    await ctx.reply(
-      `<b>🏦 Withdraw Investment</b>\n\n
-Principal: ${formatCurrency(investment.amount)}\n
-Profit: ${formatCurrency(investment.totalProfit)}\n
-Total Available: ${formatCurrency(totalAmount)}\n\n
-Enter the amount you want to withdraw (or type "max" for all):`,
-      {
-        parse_mode: "HTML",
-      }
-    );
+    // Show wallet selection
+    let message = `<b>💳 Select Wallet for Withdrawal</b>\n\n`;
+    message += `Available wallets:\n\n`;
+
+    const keyboard = {
+      inline_keyboard: wallets.map((wallet: any) => [
+        {
+          text: `${wallet.label || wallet.blockchain} ${wallet.isDefault ? "⭐" : ""}`,
+          callback_data: `withdraw_select_wallet_input_${wallet.id}`,
+        },
+      ]),
+    };
+
+    keyboard.inline_keyboard.push([
+      { text: "➕ Add New Wallet", callback_data: "add_wallet" },
+      { text: "🔙 Back", callback_data: `invest_details_${trimmedId}` },
+    ]);
+
+    await ctx.reply(message, {
+      reply_markup: keyboard,
+      parse_mode: "HTML",
+    });
   } catch (error) {
+    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Confirm wallet selection and ask for amount
+ */
+export async function handleConfirmWalletForWithdrawalInput(ctx: SessionContext, walletId: string): Promise<void> {
+  try {
+    const wallet = await (prisma as any).wallet.findUnique({
+      where: { id: walletId },
+    });
+
+    if (!wallet || wallet.userId !== ctx.session.userId) {
+      await ctx.reply("❌ Wallet not found.");
+      return;
+    }
+
+    if (!ctx.session.withdrawalData) {
+      await ctx.reply("❌ Invalid withdrawal request.");
+      return;
+    }
+
+    // Store wallet info in session
+    ctx.session.withdrawalData.walletId = walletId;
+    ctx.session.withdrawalData.walletAddress = wallet.walletAddress;
+    ctx.session.withdrawalData.blockchain = wallet.blockchain;
+    ctx.session.withdrawalData.cryptocurrency = wallet.cryptocurrency;
+
+    const message = `<b>💰 Enter Withdrawal Amount</b>\n\nWallet: <b>${wallet.label || wallet.blockchain}</b>\n\nAddress: <code>${wallet.walletAddress.substring(0, 20)}...</code>\n\nAvailable for Withdrawal: ${formatCurrency(ctx.session.withdrawalData.availableAmount)}\n\nEnter the amount you want to withdraw (or type "max" for all):`;
+
+    await ctx.reply(message, {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [[{ text: "❌ Cancel", callback_data: `invest_details_${ctx.session.withdrawalData.investmentId}` }]],
+      },
+    });
+  } catch (error) {
+    logger.error("Error confirming wallet for withdrawal:", error);
     await ctx.reply(`❌ Error: ${(error as Error).message}`);
   }
 }
@@ -1281,11 +1351,16 @@ export async function handleConfirmWithdrawalAmount(ctx: SessionContext): Promis
       return;
     }
 
-    // Create withdrawal request with token (consistent with other withdrawal flow)
+    // Create withdrawal request with wallet details
     const withdrawalRequest = await InvestmentService.createWithdrawalRequest(
       investmentId,
       withdrawAmount,
-      userId
+      userId,
+      "INVESTMENT",
+      ctx.session.withdrawalData.walletId,
+      ctx.session.withdrawalData.walletAddress,
+      ctx.session.withdrawalData.blockchain,
+      ctx.session.withdrawalData.cryptocurrency
     );
 
     // Notify admin of new withdrawal request

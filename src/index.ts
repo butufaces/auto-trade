@@ -1272,6 +1272,13 @@ bot.on("callback_query", async (ctx) => {
       return handleWithdrawInvestmentInput(ctx, investmentId);
     }
 
+    // Handle wallet selection for old investment withdrawal flow
+    if (data.startsWith("withdraw_select_wallet_input_")) {
+      const walletId = data.replace("withdraw_select_wallet_input_", "").trim();
+      const { handleConfirmWalletForWithdrawalInput } = await import("./handlers/user.js");
+      return handleConfirmWalletForWithdrawalInput(ctx, walletId);
+    }
+
     if (data.startsWith("withdraw_investment_")) {
       const investmentId = data.replace("withdraw_investment_", "").trim();
       return handleWithdrawInvestment(ctx, investmentId);

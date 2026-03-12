@@ -524,7 +524,16 @@ export class InvestmentService {
   /**
    * Create withdrawal request with email verification token
    */
-  static async createWithdrawalRequest(investmentId: string, amount: number, userId: string, type: string = "INVESTMENT") {
+  static async createWithdrawalRequest(
+    investmentId: string,
+    amount: number,
+    userId: string,
+    type: string = "INVESTMENT",
+    walletId?: string,
+    walletAddress?: string,
+    blockchain?: string,
+    cryptocurrency?: string
+  ) {
     // For referral bonus withdrawals, skip investment validation
     if (type === "REFERRAL_BONUS") {
       const user = await prisma.user.findUnique({
@@ -650,6 +659,10 @@ export class InvestmentService {
         userId,
         amount,
         bankDetails: user?.bankDetails,
+        walletId: walletId || null,
+        walletAddress: walletAddress || null,
+        blockchain: blockchain || null,
+        cryptocurrency: cryptocurrency || null,
         status: "PENDING",
         emailVerificationToken: token,
         emailVerificationExpiry: expiry,

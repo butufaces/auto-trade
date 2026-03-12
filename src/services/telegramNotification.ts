@@ -202,6 +202,12 @@ export class TelegramNotificationService {
         return;
       }
 
+      // Fetch withdrawal details to include wallet info
+      const prisma = (await import("../db/client.js")).default;
+      const withdrawal = await prisma.withdrawalRequest.findUnique({
+        where: { id: withdrawalId },
+      });
+
       let message = `<b>💸 New Withdrawal Request</b>\n\n`;
       message += `<b>User Details:</b>\n`;
       message += `👤 Name: ${userName}\n`;
@@ -209,17 +215,24 @@ export class TelegramNotificationService {
       if (userTelegramId) {
         message += `📱 Telegram ID: <code>${userTelegramId}</code>\n`;
       }
-      message += `\n<b>💰 Crypto Withdrawal Details:</b>\n`;
+      message += `\n<b>💰 Withdrawal Details:</b>\n`;
       message += `💵 Amount: ${formatCurrency(amount)}\n`;
-      message += `🪙 Cryptocurrency: USDT\n`;
-      message += `⛓️ Blockchain: TBD (Wallet Required)\n`;
+      message += `🪙 Cryptocurrency: ${withdrawal?.cryptocurrency?.toUpperCase() || "USDT"}\n`;
+      message += `⛓️ Blockchain: ${withdrawal?.blockchain?.toUpperCase() || "PENDING"}\n`;
+      if (withdrawal?.walletAddress) {
+        message += `💳 Wallet: <code>${withdrawal.walletAddress.substring(0, 30)}...</code>\n`;
+      } else {
+        message += `⚠️ Wallet: PENDING\n`;
+      }
       message += `📋 Withdrawal ID: <code>${withdrawalId}</code>\n`;
       message += `📊 Investment ID: <code>${investmentId}</code>\n`;
       message += `📅 Requested: ${new Date().toLocaleString()}\n\n`;
       message += `<b>⚠️ Status:</b>\n`;
       message += `Email verification required before processing.\n`;
-      message += `Wallet address will be shown when viewing details.\n\n`;
-      message += `<b>Action Required:</b>\n`;
+      if (!withdrawal?.walletAddress) {
+        message += `⚠️ Wallet details will be shown when verified.\n`;
+      }
+      message += `\n<b>Action Required:</b>\n`;
       message += `Use: <b>/admin</b> → <b>💱 Manage Withdrawals</b>`;
 
       await bot.api.sendMessage(config.ADMIN_CHAT_ID.toString(), message, {

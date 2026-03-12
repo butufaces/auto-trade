@@ -2,6 +2,7 @@ import { Context } from "grammy";
 import prisma from "../db/client.js";
 import logger from "../config/logger.js";
 import { formatCurrency } from "../lib/helpers.js";
+import bot from "../index.js";
 
 type SessionContext = Context & { session: any };
 
@@ -170,13 +171,24 @@ export async function handleAdminMarkWithdrawalPaid(
     // Notify user of payment
     try {
       const TelegramNotificationService = (await import("../services/telegramNotification.js")).default;
-      await TelegramNotificationService.notifyUserWithdrawalPaid(
-        withdrawal.user.telegramId?.toString() || "",
-        withdrawal.amount,
-        withdrawal.blockchain,
-        withdrawal.cryptocurrency || "USDT",
-        withdrawal.walletAddress
-      );
+      
+      // Only send crypto wallet notification if wallet details exist
+      if (withdrawal.walletAddress && withdrawal.blockchain) {
+        await TelegramNotificationService.notifyUserWithdrawalPaid(
+          withdrawal.user.telegramId?.toString() || "",
+          withdrawal.amount,
+          withdrawal.blockchain,
+          withdrawal.cryptocurrency || "USDT",
+          withdrawal.walletAddress
+        );
+      } else {
+        // Fallback: Send generic approval notification if wallet missing
+        const { formatCurrency } = await import("../lib/helpers.js");
+        const fallbackMessage = `✅ <b>Withdrawal Approved!</b>\n\nYour withdrawal request of <b>${formatCurrency(withdrawal.amount)}</b> has been approved.\\n\\nIt will be processed and sent to your registered payment account shortly.\n\nWithdrawal ID: <code>${withdrawal.id}</code>`;
+        if (withdrawal.user?.telegramId) {
+          await bot.api.sendMessage(withdrawal.user.telegramId.toString(), fallbackMessage, { parse_mode: "HTML" });
+        }
+      }
     } catch (notifyErr) {
       logger.warn("Failed to send withdrawal notification to user:", notifyErr);
     }
@@ -184,7 +196,7 @@ export async function handleAdminMarkWithdrawalPaid(
     const message = `✅ <b>Withdrawal Marked as Paid!</b>\n\n
 Withdrawal ID: <code>${withdrawalId}</code>\n
 Amount: ${formatCurrency(withdrawal.amount)}\n
-Blockchain: ${withdrawal.blockchain}\n
+Blockchain: ${withdrawal.blockchain || "N/A"}\n
 User: @${withdrawal.user?.username || "Unknown"}\n\n
 📧 User notification sent!\n
 They will see the payment in their wallet shortly.`;
