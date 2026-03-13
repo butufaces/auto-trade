@@ -424,7 +424,7 @@ bot.command("logs", requireAdmin, handleAdminLogs);
 // ==================== TEXT HANDLERS ====================
 
 // Main menu
-bot.hears("?? Begin Trading", handleViewPackages);
+bot.hears("🚀 Begin Trading", handleViewPackages);
 bot.hears("📚 Packages", handleViewPackages);
 bot.hears("📊 My Portfolio", requireActiveUser, handleViewPortfolio);
 bot.hears("💳 My Wallet", requireActiveUser, handleViewWallets);
@@ -1880,14 +1880,43 @@ bot.command("remove_welcome_media", requireAdmin, handleRemoveWelcomeMedia);
 
 // ==================== MESSAGE HANDLER ====================
 
+// This handler processes workflow-specific messages (registration, investments, etc.)
+// It should NOT intercept regular menu button clicks - those are handled by bot.hears() below
 bot.on("message", async (ctx) => {
   try {
     const session = ctx.session;
     const text = ctx.update.message?.text || "";
 
+    // Check if this message is part of a workflow that requires special handling
+    // If not, skip this handler and let bot.hears() handlers process it
+    const isWorkflowMessage = 
+      session.registrationStep ||
+      session.announcementStep ||
+      session.supportStep ||
+      session.editingField ||
+      session.editPackageStep ||
+      session.addPackageData ||
+      session.editAboutStep ||
+      session.addCurrencyData ||
+      session.editCurrencyStep ||
+      session.enteringCustomAmountFor ||
+      session.withdrawalData ||
+      session.userEditingField ||
+      session.replyingToTicketId ||
+      session.editingReferralBonus ||
+      session.addPaymentAccountStep;
+
+    // If this is not a workflow message, don't handle it here
+    if (!isWorkflowMessage && ctx.message?.text) {
+      // Let bot.hears() and other handlers process this message
+      logger.debug(`📨 Non-workflow text message received: "${text.substring(0, 50)}" - delegating to other handlers`);
+      return;
+    }
+
     // Log incoming message for debugging
-    logger.info(`📨 Message received`, {
+    logger.info(`📨 Message received (workflow)`, {
       announcementStep: session.announcementStep,
+      registrationStep: session.registrationStep,
       hasPhoto: !!ctx.message?.photo,
       hasVideo: !!ctx.message?.video,
       hasAnimation: !!ctx.message?.animation,
@@ -2235,7 +2264,8 @@ bot.on("message", async (ctx) => {
       hasPhoto: !!ctx.message?.photo,
     });
     
-    logger.info(`✅ Message processed successfully`);
+    // Allow other handlers (like bot.hears) to process this message
+    logger.info(`✅ Passing message to other handlers for processing`);
   } catch (error) {
     logger.error(`❌ Error handling message: ${(error as Error).message}`, error);
   }
