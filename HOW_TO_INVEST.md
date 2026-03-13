@@ -123,9 +123,9 @@ Total Return: $1,180
 That's $3/day!
 ```
 
-### Confirm Investment
+### Confirm Trade
 
-Click the **"✅ Confirm Investment"** button
+Click the **"✅ Confirm Trade"** button
 
 Bot will say: ✅ **Investment Created!**
 
@@ -262,9 +262,9 @@ Usually within **1-2 hours**, sometimes instantly.
 
 Bot sends:
 ```
-✅ INVESTMENT APPROVED!
+✅ TRADE APPROVED!
 
-Your investment of $1,000 in Growth Package is now ACTIVE!
+Your trade of $1,000 in Growth Package is now ACTIVE!
 
 Expected return: $1,180 (in 60 days)
 Maturity date: May 11, 2026 at 2:30 PM
@@ -277,7 +277,7 @@ Your daily profit has started accumulating!
 
 If payment wasn't clear, bot sends:
 ```
-❌ INVESTMENT REJECTED
+❌ TRADE REJECTED
 
 Reason: Payment proof unclear
 
@@ -509,13 +509,13 @@ Usually arrives in 5-30 minutes depending on network.
 
 ## 🎯 STEP 8: On Maturity Date
 
-### Investment Matures
+### Trade Closes
 
 When 60 days are complete, bot sends:
 ```
-🎉 INVESTMENT MATURED!
+🎉 TRADE CLOSED!
 
-Your Growth investment of $1,000 is now mature.
+Your Growth trade of $1,000 is now closed.
 
 Accrued Profit: $180
 Available to Withdraw: $1,180
@@ -526,7 +526,7 @@ You can now:
 2. Withdraw partial amount
 3. Keep earning (if available)
 
-[🏦 Withdraw Investment]
+[🏦 Withdraw]
 [📊 View Details]
 ```
 
@@ -534,7 +534,7 @@ You can now:
 
 To get all your money back:
 
-Click **🏦 Withdraw Investment**
+Click **🏦 Withdraw**
 
 ```
 💸 WITHDRAWAL REQUEST
@@ -582,7 +582,7 @@ Then follow same steps as daily profit withdrawal:
 
 ## ❓ COMMON QUESTIONS
 
-**Q: How long before my investment matures?**
+**Q: How long before my trade closes?**
 A: Duration depends on package. Starter = 30 days, Growth = 60 days, Premium = 90 days. Starts when payment is approved.
 
 **Q: Can I withdraw before maturity?**
@@ -684,7 +684,7 @@ If something doesn't work:
 - Can withdraw: $18
 
 **Day 60:**
-- Investment matures: MATURED
+- Trade closed: MATURED
 - Total value: $1,180
 - You can withdraw everything or part
 - Choose withdrawal amount
@@ -697,20 +697,20 @@ If something doesn't work:
 
 ### Scenario 1: Withdraw Everything at Maturity
 ```
-Day 60: Investment matures with $1,180 total
+Day 60: Trade closes with $1,180 total
 You: "I want it all"
-You click: "Withdraw Investment" and enter $1,180
-Status: Investment marked COMPLETED
+You click: "Withdraw" and enter $1,180
+Status: Trade marked COMPLETED
 Result: $1,180 sent to your wallet ✅
 ```
 
 ### Scenario 2: Withdraw Partially, Keep Earning
 ```
-Day 30: Investment value is $1,090
+Day 30: Trade value is $1,090
 You: "I need $500, but want to keep earning"
-You click: "Withdraw Investment" and enter $500
+You click: "Withdraw" and enter $500
 Result: $500 sent to wallet, $590 stays invested
-Investment status: Still MATURED, you can withdraw more later ✅
+Trade status: Still MATURED, you can withdraw more later ✅
 ```
 
 ### Scenario 3: Withdraw Daily Profits Only
@@ -720,7 +720,7 @@ Day 1: Withdraw $0.60
 Day 5: Withdraw $3
 Day 10: Withdraw $3
 ... continue ...
-Day 60: Investment matures, you withdraw full $1,180 (or what's left)
+Day 60: Trade closes, you withdraw full $1,180 (or what's left)
 Result: You got $180 profit AND got your principal back ✅
 ```
 

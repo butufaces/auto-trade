@@ -464,7 +464,7 @@ export async function handleConfirmDepositManually(ctx: SessionContext, investme
     try {
       await ctx.api.sendMessage(
         Number(investment.user.telegramId),
-        `✅ <b>Payment Confirmed!</b>\n\nYour payment has been verified by our team.\n\n<b>Investment Details:</b>\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n💵 Expected Return: ${formatCurrency(investment.expectedReturn)}\n📅 Maturity Date: ${newMaturityDate.toLocaleDateString()}\n\n✨ Your investment is now <b>ACTIVE</b> and earning returns!\n\nUse <b>/portfolio</b> to view your investments.`,
+        `✅ <b>Payment Confirmed!</b>\n\nYour payment has been verified by our team.\n\n<b>Trade Details:</b>\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n💵 Expected Return: ${formatCurrency(investment.expectedReturn)}\n📅 Maturity Date: ${newMaturityDate.toLocaleDateString()}\n\n✨ Your trade is now <b>ACTIVE</b> and earning returns!\n\nUse <b>/portfolio</b> to view your trades.`,
         { parse_mode: "HTML" }
       );
       logger.info(`[NOTIFICATION] Manual confirmation notification sent to user ${investment.userId}`);

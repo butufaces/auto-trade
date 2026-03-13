@@ -162,7 +162,7 @@ export class TelegramNotificationService {
         parse_mode: "HTML",
         reply_markup: {
           inline_keyboard: [
-            [{ text: "💰 View Investment", callback_data: `view_investment_${investmentId}` }],
+            [{ text: "💰 View Trade", callback_data: `view_investment_${investmentId}` }],
             [{ text: "🏠 Back", callback_data: "back_to_menu" }]
           ]
         }

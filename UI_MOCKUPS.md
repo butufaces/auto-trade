@@ -196,8 +196,8 @@
 │  🔔 Notification Preferences    │
 │                                 │
 │  Notify me about:               │
-│  ☑️ Investment Approved         │
-│  ☑️ Investment Matured          │
+│  ☑️ Trade Approved         │
+│  ☑️ Trade Matured          │
 │  ☑️ Payout Ready                │
 │  ☐ Community Updates            │
 │  ☑️ Weekly Summary              │
@@ -259,7 +259,7 @@
 │  ❌ Rejected Today:       3     │
 │  🔔 Announcements Sent:   2     │
 │                                 │
-│  [💰 Manage Invest] [👥 Users] │
+│  [💰 Manage Trades] [👤 Users] │
 │  [📣 Announcements] [📋 Logs]  │
 │  [⚙️ Settings]                  │
 └─────────────────────────────────┘
@@ -330,10 +330,10 @@
 └─────────────────────────────────┘
 ```
 
-### Screen 5: Investment Approved
+### Screen 5: Trade Approved
 ```
 ┌─────────────────────────────────┐
-│  ✅ Investment Approved!        │
+│  ✅ Trade Approved!        │
 │                                 │
 │  Investment #INV-004521         │
 │  Status: ✅ ACTIVE              │

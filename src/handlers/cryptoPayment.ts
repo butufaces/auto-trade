@@ -1158,7 +1158,7 @@ function startPaymentStatusChecker(
         // Notify user
         try {
           await ctx.editMessageText(
-            `✅ <b>Payment Confirmed!</b>\n\nYour investment has been activated.\n\nYour investment will start earning returns immediately.`,
+            `✅ <b>Payment Confirmed!</b>\n\nYour trade has been activated.\n\nYour trade will start earning returns immediately.`,
             {
               parse_mode: "HTML",
               reply_markup: {

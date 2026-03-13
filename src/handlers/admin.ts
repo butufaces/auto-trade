@@ -164,8 +164,8 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
       // Don't fail the approval if bonus credit fails
     }
 
-    logger.info(`✅ Investment approved successfully: ${investmentId}`);
-    const message = `✅ <b>Investment Approved!</b>\n\n
+    logger.info(`✅ Trade approved successfully: ${investmentId}`);
+    const message = `✅ <b>Trade Approved!</b>\n\n
 📦 Package: ${investment.package.icon} ${investment.package.name}
 💰 Amount: ${formatCurrency(investment.amount)}
 👤 User: ${getUserDisplayName(investment.user)}
@@ -176,12 +176,12 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
       if (investment.user.telegramId) {
         await ctx.api.sendMessage(
           Number(investment.user.telegramId),
-          `✅ <b>Investment Approved!</b>\n\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n\nYour investment is now ACTIVE and earning returns!`,
+          `✅ <b>Trade Approved!</b>\n\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n\nYour trade is now ACTIVE and earning returns!`,
           {
             parse_mode: "HTML",
             reply_markup: {
               inline_keyboard: [
-                [{ text: "💰 View Investment", callback_data: `view_investment_${investmentId}` }],
+                [{ text: "💰 View Trade", callback_data: `view_investment_${investmentId}` }],
                 [{ text: "📊 My Portfolio", callback_data: "back_to_menu" }]
               ]
             }
@@ -244,7 +244,7 @@ export async function handleProcessRejection(ctx: SessionContext): Promise<void>
       reason
     );
 
-    const message = `❌ <b>Investment Rejected</b>\n\n
+    const message = `❌ <b>Trade Rejected</b>\n\n
 📦 Package: ${investment.package.icon} ${investment.package.name}
 💰 Amount: ${formatCurrency(investment.amount)}
 👤 User: ${getUserDisplayName(investment.user)}
@@ -255,7 +255,7 @@ export async function handleProcessRejection(ctx: SessionContext): Promise<void>
       if (investment.user.telegramId) {
         await ctx.api.sendMessage(
           Number(investment.user.telegramId),
-          `❌ <b>Investment Rejected</b>\n\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n\n<b>Reason:</b>\n${reason}\n\nYou can try again with different details.`,
+          `❌ <b>Trade Rejected</b>\n\n📦 Package: ${investment.package.name}\n💰 Amount: ${formatCurrency(investment.amount)}\n\n<b>Reason:</b>\n${reason}\n\nYou can try again with different details.`,
           {
             parse_mode: "HTML",
             reply_markup: {
@@ -275,8 +275,8 @@ export async function handleProcessRejection(ctx: SessionContext): Promise<void>
     // Create notification for user
     await NotificationService.createNotification(
       investment.userId,
-      "❌ Investment Rejected",
-      `Your investment request of ${formatCurrency(investment.amount)} has been rejected. Reason: ${reason}`,
+      "❌ Trade Rejected",
+      `Your trade request of ${formatCurrency(investment.amount)} has been rejected. Reason: ${reason}`,
       "INVESTMENT",
       investmentId
     ).catch(err => logger.error("Failed to create rejection notification:", err));

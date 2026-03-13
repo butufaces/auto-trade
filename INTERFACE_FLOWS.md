@@ -41,10 +41,10 @@
 │  "Awaiting approval"           │                                │
 │                                │                                │
 │  User waits...                 │  Admin continues with         │
-│  (checks back later)           │  next pending investment      │
+│  (checks back later)           │  next pending trade           │
 │        ↓                        │                                │
 │  📱 Receives notification:      │  📧 Admin gets log entry:    │
-│  "✅ Investment Approved!"     │  "Investment #4521            │
+│  "✅ Trade Approved!"     │  "Trade #4521            │
 │  Portfolio updated             │   approved by @admin_john"    │
 │                                │                                │
 │  Views portfolio:              │  Total Investments:           │
@@ -63,12 +63,12 @@
 DAY 1 - User Action               DAY 1 - Admin Action
 ┌──────────────────────────────┐ ┌──────────────────────────────┐
 │ 10:00 AM                     │ │ 10:15 AM                     │
-│ User creates investment      │ │ Admin receives notification  │
-│ $500 in Growth package      │ │ 12 pending investments       │
+│ User creates trade      │ │ Admin receives notification  │
+│ $500 in Growth package      │ │ 12 pending trades       │
 │                              │ │                              │
 │ Status: ⏳ PENDING           │ │ Admin opens approval list    │
 │ ━━━━━━━━━━━━━━━━━━━━        │ │ @john_doe - $500 (Growth)  │
-│ Investment #INV-004521       │ │                              │
+│ Trade #INV-004521       │ │                              │
 │ Created: Jan 28, 10:00 AM   │ │ Taps ✅ Approve           │
 └──────────────────────────────┘ │                              │
                                  │ Uploads proof document       │
@@ -82,13 +82,13 @@ DAY 1 - User Waiting            │ ━━━━━━━━━━━━━━�
 └──────────────────────────────┘ └──────────────────────────────┘
         ↓                        
         ↓                        
-DAY 1 - Investment Activated     
+DAY 1 - Trade Activated     
 ┌──────────────────────────────┐ 
 │ 11:35 AM                     │ 
 │ 📱 Notification Received     │ 
-│ "✅ Investment Approved!"   │ 
+│ "✅ Trade Approved!"   │ 
 │                              │ 
-│ Investment #INV-004521       │ 
+│ Trade #INV-004521       │
 │ Status: ✅ ACTIVE            │ 
 │ Maturity Date: Mar 31        │ 
 └──────────────────────────────┘ 
@@ -100,7 +100,7 @@ USER HOLDS & WAITS FOR 30 DAYS...│
 MAR 31 - Maturity Date          
 ┌──────────────────────────────┐ 
 │ Automatic Processing:        │ 
-│ ✅ Investment Status:        │ 
+│ ✅ Trade Status:        │ 
 │    ⏳ PENDING →              │ 
 │    ✅ ACTIVE →               │ 
 │    🟢 MATURED →              │ 
@@ -239,9 +239,9 @@ LEVEL 1 - KPI Cards (Top priority)
 
 ### User Notifications
 ```
-Type 1: Investment Approved ✅
+Type 1: Trade Approved ✅
 ┌────────────────────────────────┐
-│ ✅ Investment Approved!        │
+│ ✅ Trade Approved!        │
 │                                │
 │ Your Starter investment        │
 │ of $250 has been approved.     │
@@ -359,7 +359,7 @@ Type 3: Daily Report 📋
 │ Admin: [✅ Approve & Send]                                   │
 │                                                                 │
 │ Bot sends to user:                                             │
-│ 📱 "✅ Your investment approved!"                            │
+│ 💱 "✅ Your trade approved!"                            │
 │ Status: ✅ ACTIVE                                             │
 │ Maturity: Mar 31 (30 days)                                   │
 │ Expected Return: $590                                         │

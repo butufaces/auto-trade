@@ -58,7 +58,7 @@ export async function handleStart(ctx: SessionContext): Promise<void> {
     ? `${about.welcomeText}`
     : `👋 Welcome to ${platformName}, ${getUserDisplayName(user)}!
 
-💼 Grow your wealth with our investment packages:
+💼 Grow your wealth with our trading packages:
 - 📊 Transparent packages with guaranteed ROI
 - ✅ Professional management
 - 🔒 Secure transactions
@@ -285,7 +285,7 @@ Please verify your email before investing.`,
   const expectedReturn = calculateExpectedReturn(amount, pkg.roiPercentage);
   const profit = expectedReturn - amount;
 
-  const message = `<b>✅ Confirm Investment</b>\n\n
+  const message = `<b>✅ Confirm Trade</b>\n\n
 📦 Package: ${pkg.icon} ${pkg.name}
 💰 Amount: ${formatCurrency(amount)}
 📈 ROI: ${pkg.roiPercentage}%
@@ -293,7 +293,7 @@ Please verify your email before investing.`,
 💸 Total Return: ${formatCurrency(expectedReturn)}
 📅 Duration: ${pkg.duration} days
 
-👉 <b>Confirm this investment?</b>`;
+👉 <b>Confirm this trade?</b>`;
 
   ctx.session.pendingInvestment = { packageId, amount };
 
@@ -476,7 +476,7 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
     
     // Show pending withdrawal warning
     if (hasPending && pendingWithdrawalDetails) {
-      message += `<b>💼 Your Investment Portfolio</b>\n\n`;
+      message += `<b>💼 Your Trading Portfolio</b>\n\n`;
       message += `⏳ <b>PENDING WITHDRAWAL</b>\n`;
       message += `Amount: ${formatCurrency(pendingWithdrawalDetails.amount)}\n`;
       message += `Status: ${pendingWithdrawalDetails.status}\n`;
@@ -485,20 +485,20 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
       message += `━━━━━━━━━━━━━━━\n\n`;
     }
 
-    message += `<b>🔵 Active Investments: ${activeInvestments.length}</b>\n`;
+    message += `<b>🔵 Active Trades: ${activeInvestments.length}</b>\n`;
     if (activeInvestments.length === 0) {
-      message += "No active investments yet. Start investing now! 🚀\n";
+      message += "No active trades yet. Start trading now! 🚀\n";
     }
 
     if (maturedInvestments.length > 0) {
-      message += `\n<b>🟢 Matured & Ready for Withdrawal: ${maturedInvestments.length}</b>\n`;
+      message += `\n<b>🟢 Matured & Ready to Close: ${maturedInvestments.length}</b>\n`;
       for (const inv of maturedInvestments) {
         message += `  💰 ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)} ready\n`;
       }
     }
 
     if (completedInvestments.length > 0) {
-      message += `\n<b>✅ Completed Investments: ${completedInvestments.length}</b>\n`;
+      message += `\n<b>✅ Completed Trades: ${completedInvestments.length}</b>\n`;
       for (const inv of completedInvestments) {
         message += `  ✓ ${inv.package.name} - Withdrawn: ${formatCurrency(inv.amount + inv.totalProfit)}\n`;
       }
@@ -514,9 +514,9 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
       const { InlineKeyboard } = await import("grammy");
       const keyboard = new InlineKeyboard();
 
-      // Active investments
+      // Active trades
       if (activeInvestments.length > 0) {
-        keyboard.text("🔵 ACTIVE INVESTMENTS", "noop");
+        keyboard.text("🔵 ACTIVE TRADES", "noop");
         keyboard.row();
         for (const inv of activeInvestments) {
           const statusEmoji = "🟢";
@@ -556,7 +556,7 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
 
       keyboard.text("🔙 Back", "back_to_menu");
 
-      await ctx.reply("📊 All Your Investments:", {
+      await ctx.reply("📊 All Your Trades:", {
         reply_markup: keyboard,
       });
     }
@@ -604,7 +604,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     message += `<b>${investment.package.icon} ${investment.package.name}</b>\n`;
     message += `<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\n`;
 
-    message += `<b>💰 INVESTMENT DETAILS</b>\n`;
+    message += `<b>💰 TRADE DETAILS</b>\n`;
     message += `Principal Amount: ${formatCurrency(investment.amount)}\n`;
     message += `ROI Rate: ${investment.roiPercentage}%\n`;
     message += `Expected Return: ${formatCurrency(investment.expectedReturn)}\n`;
@@ -612,7 +612,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     message += `Duration: ${investment.package.duration} days\n\n`;
 
     message += `<b>📈 CURRENT STATUS</b>\n`;
-    message += `Investment Status: <b>${investment.status}</b>\n`;
+    message += `Trade Status: <b>${investment.status}</b>\n`;
     if (trackingInfo) {
       message += `Current Value: ${formatCurrency(trackingInfo.currentValue)}\n`;
       message += `Accrued Profit: ${formatCurrency(trackingInfo.totalProfit || 0)}\n`;
@@ -627,20 +627,20 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     // Status-specific messages
     if (investment.status === "ACTIVE") {
       message += `<b>🔄 ACTIVE</b>\n`;
-      message += `Investment is earning daily profit.\n`;
-      message += `Full withdrawal available on maturity date.\n`;
+      message += `Trade is earning daily profit.\n`;
+      message += `Full closure available on maturity date.\n`;
     } else if (investment.status === "MATURED") {
-      message += `<b>🟢 MATURED - READY FOR WITHDRAWAL</b>\n`;
-      message += `Your investment has reached maturity!\n`;
+      message += `<b>🟢 CLOSED - READY FOR WITHDRAWAL</b>\n`;
+      message += `Your trade has closed!\n`;
       message += `Available to withdraw: ${formatCurrency(investment.amount + investment.totalAccruedProfit)}\n`;
       message += `(Principal + All Earned Profit)\n`;
     } else if (investment.status === "COMPLETED") {
       message += `<b>✅ COMPLETED</b>\n`;
-      message += `This investment has been successfully withdrawn.\n`;
+      message += `This trade has been successfully closed and withdrawn.\n`;
     } else {
       message += `<b>📋 ${investment.status}</b>\n`;
-      message += `Investment is locked until maturity date.\n`;
-      message += `Full withdrawal available on maturity.\n`;
+      message += `Trade is locked until maturity date.\n`;
+      message += `Full closure available on maturity.\n`;
     }
 
     await ctx.reply(message, {
@@ -655,10 +655,10 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     const { InlineKeyboard } = await import("grammy");
     const keyboard = new InlineKeyboard();
 
-    // Withdraw investment button - only show for MATURED investments
+    // Withdraw button - only show for MATURED trades
     if (investment.status === "COMPLETED") {
-      // Investment already fully withdrawn - no withdraw button
-      keyboard.text("✅ Already Withdrawn", "noop");
+      // Trade already fully withdrawn - no close button
+      keyboard.text("✅ Already Closed", "noop");
       keyboard.row();
     } else if (investment.status === "MATURED") {
       if (hasPendingWithdrawal) {
@@ -668,15 +668,15 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
         );
       } else {
         keyboard.text(
-          `🏦 Withdraw Investment (${formatCurrency(investment.amount + investment.totalProfit)})`,
+          `🏦 Withdraw Trade (${formatCurrency(investment.amount + investment.totalProfit)})`,
           `withdraw_investment_input_${trimmedId}`
         );
       }
       keyboard.row();
     } else {
-      // Investment not yet matured
+      // Trade not yet closed
       keyboard.text(
-        `⏱️ Withdraw Investment (Matures on ${new Date(investment.maturityDate).toLocaleDateString()})`,
+        `⏱️ Withdraw (Opens on ${new Date(investment.maturityDate).toLocaleDateString()})`,
         "investment_not_matured"
       );
       keyboard.row();
@@ -684,7 +684,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
 
     keyboard.text("🔙 Back to Portfolio", "view_portfolio");
 
-    // Add live growth button for ACTIVE investments
+    // Add live growth button for ACTIVE trades
     if (investment.status === "ACTIVE") {
       keyboard.row();
       keyboard.text("📈 View Live Growth", `view_live_growth_${trimmedId}`);

@@ -650,12 +650,12 @@ export async function handleApprovePaymentProof(ctx: any): Promise<void> {
     try {
       await ctx.api.sendMessage(
         Number(investment.userId),
-        `✅ <b>Payment Verified!</b>\n\n💰 Amount: ${formatCurrency(investment.amount)}\n\nYour investment is now ACTIVE and earning returns daily!`,
+        `✅ <b>Payment Verified!</b>\n\n💰 Amount: ${formatCurrency(investment.amount)}\n\nYour trade is now ACTIVE and earning returns daily!`,
         {
           parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: [
-              [{ text: "💰 View Investment", callback_data: `view_investment_${investmentId}` }],
+              [{ text: "💰 View Trade", callback_data: `view_investment_${investmentId}` }],
               [{ text: "📊 My Portfolio", callback_data: "back_to_menu" }]
             ]
           }

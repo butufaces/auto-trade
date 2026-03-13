@@ -562,15 +562,15 @@ Shows:
 - Send payment from your wallet
 - Payment auto-verified by blockchain (15 min timeout)
 
-### Step 5: Investment Activates
-- Admin approves investment
-- Bot notifies you "✅ Investment Approved!"
-- Investment status changes to ACTIVE
+### Step 5: Trade Activates
+- Admin approves trade
+- Bot notifies you "✅ Trade Approved!"
+- Trade status changes to ACTIVE
 - Maturity date shown (duration days from now)
 - Daily accrual begins immediately
 
 ### Step 6: Watch Growth
-- Click "📈 View Investment Details" to see:
+- Click "📈 View Trade Details" to see:
   - Current value (updates daily)
   - Accrued profit
   - Days remaining

@@ -129,12 +129,12 @@ PENDING (waiting for payment)
   │
   ├─ [15 min expired] → EXPIRED
   │                        ↓
-  │                 Investment REJECTED
+  │                 Trade REJECTED
   │                 User notified (retry) ❌
   │
   └─ [Nowpayments failure] → FAILED
                                  ↓
-                          Investment REJECTED
+                          Trade REJECTED
                           User notified ❌
 ```
 

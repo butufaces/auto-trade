@@ -201,7 +201,7 @@ Your crypto payment has been received and verified.
 💵 Expected Return: $${investment.expectedReturn.toFixed(2)}
 📅 Maturity Date: ${maturityToShow.toLocaleDateString()} at ${maturityToShow.toLocaleTimeString()}
 
-✨ Your investment is now <b>ACTIVE</b> and earning returns!
+✨ Your trade is now <b>ACTIVE</b> and earning returns!
 
 Use <b>/portfolio</b> to view your investments.
     `.trim();
