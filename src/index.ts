@@ -424,7 +424,7 @@ bot.command("logs", requireAdmin, handleAdminLogs);
 // ==================== TEXT HANDLERS ====================
 
 // Main menu
-bot.hears("� Begin Trading", handleViewPackages);
+bot.hears("?? Begin Trading", handleViewPackages);
 bot.hears("📚 Packages", handleViewPackages);
 bot.hears("📊 My Portfolio", requireActiveUser, handleViewPortfolio);
 bot.hears("💳 My Wallet", requireActiveUser, handleViewWallets);
