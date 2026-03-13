@@ -1897,14 +1897,12 @@ bot.on("message", async (ctx) => {
       session.editPackageStep ||
       session.addPackageData ||
       session.editAboutStep ||
-      session.addCurrencyData ||
-      session.editCurrencyStep ||
       session.enteringCustomAmountFor ||
       session.withdrawalData ||
-      session.userEditingField ||
+      session.editingAccountId ||
+      session.addingPaymentAccount ||
       session.replyingToTicketId ||
-      session.editingReferralBonus ||
-      session.addPaymentAccountStep;
+      session.editingReferralBonus;
 
     // If this is not a workflow message, don't handle it here
     if (!isWorkflowMessage && ctx.message?.text) {
