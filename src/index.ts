@@ -61,8 +61,6 @@ import {
   handleNotifications,
   handleNotificationDetail,
   handleShowInvestmentDetails,
-  handleViewLiveGrowth,
-  handleCloseLiveGrowth,
   handleWithdrawInvestment,
   handleWithdrawInvestmentInput,
   handleWithdrawalAmountInput,
@@ -72,6 +70,10 @@ import {
   handleSaveWallet,
   handleDeleteWallet,
 } from "./handlers/user.js";
+
+import {
+  handleViewMyTrades,
+} from "./handlers/user-trades.js";
 
 // Log quick DB sanity info on startup
 async function logDbSanity() {
@@ -297,6 +299,7 @@ interface SessionData {
   rejectInvestmentId?: string;
   investmentPage?: number;
   allInvestmentPage?: number;
+  tradesPage?: number;
   userPage?: number;
   withdrawalPage?: number;
   notificationPage?: number;
@@ -449,6 +452,7 @@ bot.command("logs", requireAdmin, handleAdminLogs);
 bot.hears("🚀 Begin Trading", handleViewPackages);
 bot.hears("📚 Packages", handleViewPackages);
 bot.hears("📊 My Portfolio", requireActiveUser, handleViewPortfolio);
+bot.hears("💼 My Trades", requireActiveUser, handleViewMyTrades);
 bot.hears("💳 My Wallet", requireActiveUser, handleViewWallets);
 bot.hears("🎁 My Referrals", handleViewMyReferrals);
 bot.hears("⚙️ Settings", async (ctx: any) => {
@@ -789,6 +793,17 @@ bot.on("callback_query", async (ctx) => {
       if (!ctx.session.allInvestmentPage) ctx.session.allInvestmentPage = 1;
       ctx.session.allInvestmentPage++;
       return handleManageAllInvestments(ctx);
+    }
+
+    // My Trades pagination
+    if (data === "my_trades_prev_page") {
+      ctx.session.tradesPage = Math.max(1, (ctx.session.tradesPage || 1) - 1);
+      return handleViewMyTrades(ctx);
+    }
+
+    if (data === "my_trades_next_page") {
+      ctx.session.tradesPage = (ctx.session.tradesPage || 1) + 1;
+      return handleViewMyTrades(ctx);
     }
 
     // Pending deposits (admin - manual payment confirmation)
@@ -1264,17 +1279,6 @@ bot.on("callback_query", async (ctx) => {
     if (data.startsWith("invest_details_")) {
       const investmentId = data.replace("invest_details_", "");
       return handleViewInvestmentDetails(ctx, investmentId);
-    }
-
-    // Live growth view
-    if (data.startsWith("view_live_growth_")) {
-      const investmentId = data.replace("view_live_growth_", "");
-      return handleViewLiveGrowth(ctx, investmentId);
-    }
-
-    if (data.startsWith("close_live_growth_")) {
-      const investmentId = data.replace("close_live_growth_", "");
-      return handleCloseLiveGrowth(ctx, investmentId);
     }
 
     // CRYPTO PAYMENT CALLBACKS
@@ -2751,3 +2755,5 @@ process.on("uncaughtException", (error) => {
 main();
 
 export default bot;
+
+
