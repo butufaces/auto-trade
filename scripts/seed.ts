@@ -1,4 +1,4 @@
-import { seedHelpArticles } from "./seedHelpArticles.js";
+import { seedHelpArticles } from "../src/scripts/seedHelpArticles.js";
 
 async function main() {
   console.log("🌱 Running seed scripts...");
