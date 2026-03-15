@@ -49,6 +49,7 @@ import {
   handleReferralBonusAmountInput,
   handleConfirmReferralWithdrawal,
   handleHelp,
+  handleHelpArticleView,
   handleViewBankDetails,
   handleEditBankDetails,
   handleProcessBankDetails,
@@ -209,6 +210,18 @@ import {
   handleEditPlatformPrivacyUrl,
   handleProcessSettingsInput,
 } from "./handlers/admin-settings.js";
+
+import {
+  handleManageHelpArticles,
+  handleViewAllHelpArticles,
+  handleAddHelpArticleStart,
+  handleHelpArticleInput,
+  handleSaveHelpArticle,
+  handleEditHelpArticle,
+  handleDeleteHelpArticleConfirm,
+  handleDeleteHelpArticle,
+  handleToggleHelpArticleStatus,
+} from "./handlers/admin-help.js";
 
 import {
   handleStartRegistration,
@@ -389,6 +402,15 @@ interface SessionData {
   changingEmailPostRegistration?: boolean;
   // Welcome media management
   managingWelcomeMedia?: boolean;
+  // Help article management
+  helpArticleCreation?: {
+    step: "title" | "icon" | "content" | "category" | "confirm";
+    title?: string;
+    icon?: string;
+    content?: string;
+    category?: string;
+    articleId?: string;
+  } | null;
 }
 
 // Create bot
@@ -469,6 +491,20 @@ bot.hears("ℹ️ About", async (ctx: any) => {
     return handleViewAbout(ctx);
   }
 });
+
+bot.hears("📚 Help Articles", async (ctx: any) => {
+  // Check if user is admin
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.session.userId },
+  });
+  
+  if (user?.isAdmin) {
+    return handleManageHelpArticles(ctx);
+  } else {
+    return handleHelp(ctx);
+  }
+});
+
 bot.hears("📞 Support", async (ctx: any) => {
   // Check if user is admin
   const user = await prisma.user.findUnique({
@@ -803,6 +839,53 @@ bot.on("callback_query", async (ctx) => {
 
     if (data === "view_about") {
       return handleViewAbout(ctx);
+    }
+
+    // ==================== HELP ARTICLE MANAGEMENT ====================
+
+    if (data === "help_menu") {
+      return handleHelp(ctx);
+    }
+
+    if (data.startsWith("help_article_")) {
+      const articleId = data.replace("help_article_", "");
+      return handleHelpArticleView(ctx, articleId);
+    }
+
+    if (data === "manage_help_articles") {
+      return handleManageHelpArticles(ctx);
+    }
+
+    if (data === "help_view_all") {
+      return handleViewAllHelpArticles(ctx);
+    }
+
+    if (data === "help_add_new") {
+      return handleAddHelpArticleStart(ctx);
+    }
+
+    if (data === "help_save_article") {
+      return handleSaveHelpArticle(ctx);
+    }
+
+    if (data.startsWith("help_edit_")) {
+      const articleId = data.replace("help_edit_", "");
+      return handleEditHelpArticle(ctx, articleId);
+    }
+
+    if (data.startsWith("help_toggle_")) {
+      const articleId = data.replace("help_toggle_", "");
+      return handleToggleHelpArticleStatus(ctx, articleId);
+    }
+
+    if (data.startsWith("help_delete_confirm_yes_")) {
+      const articleId = data.replace("help_delete_confirm_yes_", "");
+      return handleDeleteHelpArticle(ctx, articleId);
+    }
+
+    if (data.startsWith("help_delete_confirm_")) {
+      const articleId = data.replace("help_delete_confirm_", "");
+      return handleDeleteHelpArticleConfirm(ctx, articleId);
     }
 
     // ==================== CURRENCY MANAGEMENT ====================
@@ -1902,7 +1985,8 @@ bot.on("message", async (ctx) => {
       session.editingAccountId ||
       session.addingPaymentAccount ||
       session.replyingToTicketId ||
-      session.editingReferralBonus;
+      session.editingReferralBonus ||
+      session.helpArticleCreation;
 
     // If this is not a workflow message, don't handle it here
     if (!isWorkflowMessage && ctx.message?.text) {
@@ -2246,6 +2330,11 @@ bot.on("message", async (ctx) => {
       // User selection is now handled via callbacks
       logger.error(`❌ User selection error: No user selected from list`);
       return ctx.reply("❌ Please select a user from the list above");
+    }
+
+    // Help article creation workflow
+    if (session.helpArticleCreation) {
+      return handleHelpArticleInput(ctx, text);
     }
 
     // Handle text-based back buttons as fallback
@@ -2618,6 +2707,14 @@ async function main(): Promise<void> {
 
     // Initialize packages from env
     await PackageService.initializePackages();
+
+    // Seed help articles if not already present
+    try {
+      const { seedHelpArticles } = await import("./scripts/seedHelpArticles.js");
+      await seedHelpArticles();
+    } catch (error) {
+      logger.warn("Help articles seeding skipped:", error);
+    }
 
     // Start scheduled tasks
     startScheduledTasks(bot);

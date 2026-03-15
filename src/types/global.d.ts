@@ -2,6 +2,14 @@ declare module "grammy" {
   interface SessionData {
     pendingDepositPage?: number;
     settingsEditingField?: string | null;
+    helpArticleCreation?: {
+      step: "title" | "icon" | "content" | "category" | "confirm";
+      title?: string;
+      icon?: string;
+      content?: string;
+      category?: string;
+      articleId?: string;
+    } | null;
   }
 }
 

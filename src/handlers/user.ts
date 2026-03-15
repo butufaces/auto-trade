@@ -1951,34 +1951,99 @@ Tap below to view or manage your referrals:`;
 }
 
 /**
- * Help command
+ * Help command - Show list of help articles
  */
 export async function handleHelp(ctx: SessionContext): Promise<void> {
-  const message = `<b>❓ Help & FAQ</b>\n\n
-<b>Common Questions:</b>
+  try {
+    const HelpArticleService = (await import(
+      "../services/helpArticle.js"
+    )).default;
 
-1️⃣ <b>How do I invest?</b>
-   Tap "💼 Invest", select a package, choose amount, confirm.
+    const articles = await HelpArticleService.getAllActiveArticles();
 
-2️⃣ <b>What's the minimum investment?</b>
-   ${formatCurrency(100)}
+    if (articles.length === 0) {
+      await ctx.reply(
+        `<b>❓ Help & Support</b>\n\n` +
+          `No help articles available yet.\n\n` +
+          `📞 Contact support: /support`,
+        {
+          reply_markup: mainMenuKeyboard,
+          parse_mode: "HTML",
+        }
+      );
+      return;
+    }
 
-3️⃣ <b>When do I get my returns?</b>
-   After the investment duration ends, usually within 48 hours.
+    let message = `<b>❓ Help & Support</b>\n\n`;
+    message += `Tap a topic below to learn more:\n\n`;
 
-4️⃣ <b>Can I withdraw early?</b>
-   Contact support for early withdrawal options.
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
 
-5️⃣ <b>Is this safe?</b>
-   Yes! All investments are secured and verified.
+    // Add article buttons
+    for (const article of articles) {
+      keyboard.text(
+        `${article.icon} ${article.title}`,
+        `help_article_${article.id}`
+      );
+      keyboard.row();
+    }
 
-📞 <b>Support:</b>
-Contact @support for assistance.`;
+    // Add back button
+    keyboard.text("🔙 Back", "back_to_menu");
 
-  await ctx.reply(message, {
-    reply_markup: mainMenuKeyboard,
-    parse_mode: "HTML",
-  });
+    await ctx.reply(message, {
+      reply_markup: keyboard,
+      parse_mode: "HTML",
+    });
+  } catch (error) {
+    logger.error("Error showing help menu:", error);
+    await ctx.reply("❌ Failed to load help articles", {
+      reply_markup: mainMenuKeyboard,
+    });
+  }
+}
+
+/**
+ * Show help article content
+ */
+export async function handleHelpArticleView(
+  ctx: SessionContext,
+  articleId: string
+): Promise<void> {
+  try {
+    const HelpArticleService = (await import(
+      "../services/helpArticle.js"
+    )).default;
+
+    const article = await HelpArticleService.getArticleById(articleId);
+
+    if (!article || !article.isActive) {
+      await ctx.reply("❌ Article not found or has been disabled");
+      return handleHelp(ctx);
+    }
+
+    let message = `<b>${article.icon} ${article.title}</b>\n\n`;
+    message += `${article.content}\n\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
+
+    keyboard.text("📋 Back to Help", "help_menu");
+    keyboard.row();
+    keyboard.text("🏠 Back to Menu", "back_to_menu");
+
+    await ctx.reply(message, {
+      reply_markup: keyboard,
+      parse_mode: "HTML",
+    });
+  } catch (error) {
+    logger.error("Error showing help article:", error);
+    await ctx.reply("❌ Failed to load article", {
+      reply_markup: mainMenuKeyboard,
+    });
+  }
 }
 
 /**
