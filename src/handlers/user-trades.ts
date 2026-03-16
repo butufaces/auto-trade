@@ -492,12 +492,12 @@ export async function handleViewTradeDetails(ctx: SessionContext): Promise<void>
     logger.info(`📊 Trade Details: ${investment.id} (${investment.package.name}) for user ${userId}`);
 
     // Build detailed message
-    let message = `<b>💼 Trade Details</b>\n\n`;
+    let message = `<b>💼 Trading Position</b>\n\n`;
 
     message += `<b>📦 Package:</b> ${investment.package.name}\n`;
-    message += `<b>💰 Amount:</b> ${formatCurrency(investment.amount)}\n`;
-    message += `<b>📈 ROI:</b> ${investment.roiPercentage}%\n`;
-    message += `<b>Expected Return:</b> ${formatCurrency(investment.expectedReturn)}\n`;
+    message += `<b>Position Size:</b> ${formatCurrency(investment.amount)}\n`;
+    message += `<b>📈 Expected Return Rate:</b> ${investment.roiPercentage}%\n`;
+    message += `<b>Projected P&L:</b> ${formatCurrency(investment.expectedReturn)}\n`;
     message += `\n`;
 
     // Status info
@@ -536,34 +536,34 @@ export async function handleViewTradeDetails(ctx: SessionContext): Promise<void>
         const totalDays = investment.package.duration;
         const daysRemaining = Math.max(0, totalDays - daysElapsed);
 
-        message += `<b>Progress:</b> ${daysElapsed}/${totalDays} days\n`;
+        message += `<b>📊 Trading Timeline:</b> ${daysElapsed}/${totalDays} days\n`;
         if (daysRemaining > 0) {
-          message += `<b>Days Remaining:</b> ${daysRemaining}\n`;
+          message += `<b>⏳ Closing In:</b> ${daysRemaining} days\n`;
         }
         message += `\n`;
 
         const realTime = InvestmentService.calculateRealTimeValue(investment as any);
-        message += `<b>💵 Current Value:</b> ${formatCurrency(realTime.currentValue)}\n`;
-        message += `<b>Accrued Profit:</b> ${formatCurrency(investment.totalAccruedProfit)}\n`;
+        message += `<b>💵 Position Value:</b> ${formatCurrency(realTime.currentValue)}\n`;
+        message += `<b>📈 Unrealized Profit:</b> ${formatCurrency(investment.totalAccruedProfit)}\n`;
       } catch (error) {
         logger.warn(`Error calculating real-time value for investment ${investment.id}:`, error);
-        message += `<b>💵 Current Value:</b> ${formatCurrency(investment.amount + investment.totalAccruedProfit)}\n`;
-        message += `<b>Accrued Profit:</b> ${formatCurrency(investment.totalAccruedProfit)}\n`;
+        message += `<b>💵 Position Value:</b> ${formatCurrency(investment.amount + investment.totalAccruedProfit)}\n`;
+        message += `<b>📈 Unrealized Profit:</b> ${formatCurrency(investment.totalAccruedProfit)}\n`;
       }
     }
 
     // Earnings info for completed trades
     if (investment.status === "COMPLETED") {
-      message += `<b>Total Profit:</b> ${formatCurrency(investment.totalProfit)}\n`;
-      message += `<b>Withdrawn:</b> ${formatCurrency(investment.availableWithdrawable || investment.totalProfit)}\n`;
+      message += `<b>Total Realized P&L:</b> ${formatCurrency(investment.totalProfit)}\n`;
+      message += `<b>Settled:</b> ${formatCurrency(investment.availableWithdrawable || investment.totalProfit)}\n`;
     }
 
     // Pending trade info
     if (investment.status === "PENDING") {
       const createdAt = new Date(investment.createdAt);
       const hoursAgo = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60));
-      message += `<b>🕐 Pending for:</b> ${hoursAgo}h\n`;
-      message += `<b>⚠️ Note:</b> Will be auto-removed if pending for more than 24 hours\n`;
+      message += `<b>⏰ Awaiting Activation:</b> ${hoursAgo}h\n`;
+      message += `<b>⚠️ Note:</b> Position will auto-cancel if pending for more than 24 hours\n`;
     }
 
     // Build keyboard

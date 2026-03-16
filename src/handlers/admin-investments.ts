@@ -331,7 +331,7 @@ Investment ID: <code>${investment.id}</code>`,
 }
 
 /**
- * View pending deposits (awaiting payment confirmation)
+ * View pending deposits (awaiting payment confirmation for trades)
  */
 export async function handlePendingDeposits(ctx: SessionContext): Promise<void> {
   try {

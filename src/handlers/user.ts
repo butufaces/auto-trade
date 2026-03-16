@@ -184,7 +184,7 @@ Once verified, you'll be able to invest immediately! 🚀`,
 
   const keyboard = createPackageKeyboard(packages);
 
-  await ctx.reply("📦 Select a Package to Invest", {
+  await ctx.reply("📦 Select a Trading Package", {
     reply_markup: keyboard,
     parse_mode: "HTML",
   });
@@ -220,14 +220,14 @@ Please verify your email before investing.`,
   }
 
   const message = `<b>${pkg.icon} ${pkg.name}</b>\n\n
-📊 Investment Details:
+📊 Trade Details:
 • Amount: ${formatCurrency(pkg.minAmount)} - ${formatCurrency(pkg.maxAmount)}
 • Duration: ${pkg.duration} days
 • ROI: <b>${pkg.roiPercentage}%</b>
 • Risk Level: ${pkg.riskLevel}
 ${pkg.description ? `• Info: ${pkg.description}` : ""}
 
-💡 Example: Invest ${formatCurrency(pkg.minAmount)}, earn ${formatCurrency(
+💡 Example: Trade ${formatCurrency(pkg.minAmount)}, earn ${formatCurrency(
     calculateExpectedReturn(pkg.minAmount, pkg.roiPercentage)
   )}
 
@@ -299,7 +299,7 @@ export async function handleConfirmInvestment(ctx: SessionContext): Promise<void
   const { packageId, amount } = ctx.session.pendingInvestment || {};
 
   if (!packageId || !amount) {
-    await ctx.reply("❌ Invalid investment data");
+    await ctx.reply("❌ Invalid trade data");
     return;
   }
 
@@ -355,7 +355,7 @@ Please verify your email before investing.`,
 
     // Show merged crypto payment confirmation screen
     let message = `<b>💳 Confirm & Select Payment</b>\n\n`;
-    message += `<b>Investment Summary:</b>\n`;
+    message += `<b>Trade Summary:</b>\n`;
     message += `📦 Package: ${investment.package.icon} ${investment.package.name}\n`;
     message += `💵 Amount: ${formatCurrency(investment.amount)}\n`;
     message += `📅 Duration: ${investment.package.duration} days\n`;
@@ -382,7 +382,7 @@ Please verify your email before investing.`,
     // Add cancel button
     keyboard.push([
       {
-        text: `❌ Cancel Investment`,
+        text: `❌ Cancel Trade`,
         callback_data: `cancel_investment_${investment.id}`,
       },
     ]);
@@ -433,9 +433,9 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
       message += `🔔 <b>You have ${unreadCount} new notification${unreadCount !== 1 ? "s" : ""}</b>\n\n`;
     }
 
-    message += `<b>Account Summary:</b>\n`;
-    message += `💰 Total Invested: ${formatCurrency(profile.totalInvested)}\n`;
-    message += `💵 Total Earned: ${formatCurrency(profile.totalEarned)}\n`;
+    message += `<b>Trading Account Summary:</b>\n`;
+    message += `💰 Total Trading Capital: ${formatCurrency(profile.totalInvested)}\n`;
+    message += `💵 Total Profits Earned: ${formatCurrency(profile.totalEarned)}\n`;
     message += `🏦 Total Withdrawn: ${formatCurrency(profile.totalWithdrawn)}\n\n`;
 
     // Get pending withdrawals
@@ -476,20 +476,20 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
 
     message += `<b>🔵 Active Trades: ${activeInvestments.length}</b>\n`;
     if (activeInvestments.length === 0) {
-      message += "No active trades yet. Start trading now! 🚀\n";
+      message += "No active trades yet. Open your first trading position! 🚀\n";
     }
 
     if (maturedInvestments.length > 0) {
-      message += `\n<b>🟢 Matured & Ready to Close: ${maturedInvestments.length}</b>\n`;
+      message += `\n<b>🟢 Closed & Ready to Withdraw: ${maturedInvestments.length}</b>\n`;
       for (const inv of maturedInvestments) {
-        message += `  💰 ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)} ready\n`;
+        message += `  💰 ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)} awaiting withdrawal\n`;
       }
     }
 
     if (completedInvestments.length > 0) {
-      message += `\n<b>✅ Completed Trades: ${completedInvestments.length}</b>\n`;
+      message += `\n<b>✅ Closed Positions: ${completedInvestments.length}</b>\n`;
       for (const inv of completedInvestments) {
-        message += `  ✓ ${inv.package.name} - Withdrawn: ${formatCurrency(inv.amount + inv.totalProfit)}\n`;
+        message += `  ✓ ${inv.package.name} - Settled: ${formatCurrency(inv.amount + inv.totalProfit)}\n`;
       }
     }
 
@@ -508,7 +508,7 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
     // Back button
     keyboard.text("🔙 Back", "back_to_menu");
 
-    await ctx.reply("Navigate to manage your trades:", {
+    await ctx.reply("Manage your trading positions:", {
       reply_markup: keyboard,
     });
   } catch (error) {
@@ -609,17 +609,17 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     // Withdraw button - only show for MATURED trades
     if (investment.status === "COMPLETED") {
       // Trade already fully withdrawn - no close button
-      keyboard.text("✅ Already Closed", "noop");
+      keyboard.text("✅ Closed & Settled", "noop");
       keyboard.row();
     } else if (investment.status === "MATURED") {
       if (hasPendingWithdrawal) {
         keyboard.text(
-          `🔒 Withdraw (Pending Withdrawal Active)`,
+          `🔐 Withdraw (Pending Withdrawal Active)`,
           "has_pending_withdrawal"
         );
       } else {
         keyboard.text(
-          `🏦 Withdraw Trade (${formatCurrency(investment.amount + investment.totalProfit)})`,
+          `🏦 Settle Position (${formatCurrency(investment.amount + investment.totalProfit)})`,
           `withdraw_investment_input_${trimmedId}`
         );
       }
@@ -627,7 +627,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
     } else {
       // Trade not yet closed
       keyboard.text(
-        `⏱️ Withdraw (Opens on ${new Date(investment.maturityDate).toLocaleDateString()})`,
+        `⏱️ Position Available on ${new Date(investment.maturityDate).toLocaleDateString()}`,
         "investment_not_matured"
       );
       keyboard.row();
@@ -635,7 +635,7 @@ export async function handleShowInvestmentDetails(ctx: SessionContext, investmen
 
     keyboard.text("🔙 Back to Portfolio", "view_portfolio");
 
-    await ctx.reply("Choose action:", {
+    await ctx.reply("Position actions:", {
       reply_markup: keyboard,
     });
   } catch (error) {

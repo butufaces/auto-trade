@@ -195,7 +195,7 @@ async function notifyPaymentConfirmed(
 
 Your crypto payment has been received and verified.
 
-📊 <b>Investment Details:</b>
+📊 <b>Trade Details:</b>
 📦 Package: ${investment.package?.name || "Unknown"}
 💰 Amount: $${investment.amount.toFixed(2)}
 💵 Expected Return: $${investment.expectedReturn.toFixed(2)}
@@ -203,7 +203,7 @@ Your crypto payment has been received and verified.
 
 ✨ Your trade is now <b>ACTIVE</b> and earning returns!
 
-Use <b>/portfolio</b> to view your investments.
+Use <b>/portfolio</b> to view your trades.
     `.trim();
 
     await bot.api.sendMessage(telegramId.toString(), message, {
@@ -233,16 +233,16 @@ async function notifyPaymentFailed(
 
 Your crypto payment was not received within the time limit.
 
-📊 <b>Investment Details:</b>
+📊 <b>Trade Details:</b>
 📦 Package: ${investment.package?.name || "Unknown"}
 💰 Amount: $${investment.amount.toFixed(2)}
 Reason: ${failureReason === "EXPIRED" ? "Payment window expired" : "Payment processing failed"}
 
 🔄 <b>What happens next:</b>
-Your investment has been cancelled. You can:
-• <b>Try Again</b> - Start a new investment with the same amount
-• <b>Modify Amount</b> - Choose a different investment amount
-• <b>Cancel</b> - Discard this investment
+Your trade has been cancelled. You can:
+• <b>Try Again</b> - Start a new trade with the same amount
+• <b>Modify Amount</b> - Choose a different trade amount
+• <b>Cancel</b> - Discard this trade
 
 Do you want to retry?
     `.trim();
@@ -252,7 +252,7 @@ Do you want to retry?
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "🔄 Retry Investment", callback_data: `retry_invest_${investment.packageId}_${investment.amount}` },
+            { text: "🔄 Retry Trade", callback_data: `retry_invest_${investment.packageId}_${investment.amount}` },
             { text: "❌ Cancel", callback_data: "cancel_investment" },
           ],
         ],

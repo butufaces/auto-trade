@@ -815,7 +815,7 @@ async function createCryptoPayment(
           ],
           [
             {
-              text: "Cancel Investment",
+              text: "Cancel Trade",
               callback_data: `cancel_investment_${investmentId}`,
             },
           ],
@@ -1062,7 +1062,7 @@ export async function handleCancelCryptoPayment(ctx: SessionContext): Promise<vo
       });
     }
 
-    await ctx.editMessageText(`Investment cancelled. You can start a new investment anytime.`, {
+    await ctx.editMessageText(`Trade cancelled. You can start a new trade anytime.`, {
       reply_markup: {
         inline_keyboard: [
           [{ text: "Back to Main Menu", callback_data: "menu" }],
