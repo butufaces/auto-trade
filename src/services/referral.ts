@@ -266,6 +266,56 @@ class ReferralService {
   }
 
   /**
+   * Get minimum referral withdrawal threshold (from config or settings)
+   */
+  static async getMinimumReferralThreshold(): Promise<number> {
+    try {
+      // First check if there's a setting in DB
+      const setting = await prisma.settings.findUnique({
+        where: { key: "MINIMUM_REFERRAL_WITHDRAWAL_AMOUNT" },
+      });
+
+      if (setting && setting.value) {
+        return parseFloat(setting.value);
+      }
+
+      // Fall back to env variable
+      return config.MINIMUM_REFERRAL_PAYOUT || 100;
+    } catch (error) {
+      logger.error("Error getting minimum referral threshold:", error);
+      return config.MINIMUM_REFERRAL_PAYOUT || 100;
+    }
+  }
+
+  /**
+   * Update minimum referral withdrawal threshold (admin)
+   */
+  static async updateMinimumReferralThreshold(newThreshold: number, updatedBy: string): Promise<void> {
+    try {
+      await prisma.settings.upsert({
+        where: { key: "MINIMUM_REFERRAL_WITHDRAWAL_AMOUNT" },
+        update: {
+          value: newThreshold.toString(),
+          updatedBy,
+          updatedAt: new Date(),
+        },
+        create: {
+          key: "MINIMUM_REFERRAL_WITHDRAWAL_AMOUNT",
+          value: newThreshold.toString(),
+          type: "number",
+          description: "Minimum referral bonus amount required to initiate withdrawal (in dollars)",
+          updatedBy,
+        },
+      });
+
+      logger.info(`Minimum referral withdrawal threshold updated to $${newThreshold} by admin ${updatedBy}`);
+    } catch (error) {
+      logger.error("Error updating minimum referral threshold:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Validate referral code format and existence
    */
   static async validateReferralCode(referralCode: string, excludeUserId?: string): Promise<{ valid: boolean; message: string }> {

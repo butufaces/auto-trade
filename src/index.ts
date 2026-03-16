@@ -119,6 +119,8 @@ import {
   handleReferralSettings,
   handleEditReferralBonusStart,
   handleEditReferralBonusInput,
+  handleEditMinimumReferralThresholdStart,
+  handleEditMinimumReferralThresholdInput,
   handleViewReferralAnalytics,
   handleManageWelcomeMedia,
   handleWelcomeMediaPhoto,
@@ -408,6 +410,7 @@ interface SessionData {
   replyingToTicketId?: string;
   viewingTicketId?: string;
   editingReferralBonus?: boolean;
+  editingReferralThreshold?: boolean;
   // Wallet-related
   pendingWallet?: {
     cryptocurrency?: string;
@@ -1987,6 +1990,11 @@ When they use your code during registration, you'll earn a bonus from their inve
       return handleEditReferralBonusStart(ctx);
     }
 
+    if (data === "edit_minimum_referral_withdrawal") {
+      logPageView(`Edit Minimum Referral Withdrawal`, ctx.session.userId);
+      return handleEditMinimumReferralThresholdStart(ctx);
+    }
+
     if (data === "view_referral_analytics") {
       logPageView(`Referral Analytics`, ctx.session.userId);
       return handleViewReferralAnalytics(ctx);
@@ -2124,6 +2132,7 @@ bot.on("message", async (ctx) => {
       session.addingPaymentAccount ||
       session.replyingToTicketId ||
       session.editingReferralBonus ||
+      session.editingReferralThreshold ||
       session.helpArticleCreation ||
       session.pendingWallet;
 
@@ -2445,6 +2454,11 @@ bot.on("message", async (ctx) => {
     // Referral bonus percentage edit workflow
     if (session.editingReferralBonus) {
       return handleEditReferralBonusInput(ctx);
+    }
+
+    // Minimum referral withdrawal threshold edit workflow
+    if (session.editingReferralThreshold) {
+      return handleEditMinimumReferralThresholdInput(ctx);
     }
 
     // Withdrawal workflow - handle amount input

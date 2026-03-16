@@ -1658,7 +1658,6 @@ export async function handleViewProfile(ctx: SessionContext): Promise<void> {
 📧 Email: ${user.email || "Not set"}
 🔐 Email Status: ${user.emailVerified ? "✅ Verified" : "⏳ Pending Verification"}
 📞 Phone: ${user.phoneNumber || "Not set"}
-✅ KYC: ${user.kycVerified ? "Verified" : "Not verified"}
 📅 Joined: ${formatDate(user.createdAt)}
 
 <b>💰 Earnings Summary:</b>
@@ -2385,6 +2384,11 @@ export async function handleViewMyReferrals(ctx: SessionContext): Promise<void> 
   try {
     const stats = await ReferralService.getUserReferralStats(ctx.session.userId);
     const referredUsers = await ReferralService.getUsersReferredByCode(stats.referralCode!);
+    const minimumThreshold = await ReferralService.getMinimumReferralThreshold();
+    const bonusPercentage = await ReferralService.getBonusPercentage();
+
+    const canWithdraw = stats.referralEarnings >= minimumThreshold;
+    const amountNeeded = Math.max(0, minimumThreshold - stats.referralEarnings);
 
     let message = `<b>🎁 My Referral Stats</b>\n\n
 <b>Your Referral Code:</b>
@@ -2394,7 +2398,12 @@ export async function handleViewMyReferrals(ctx: SessionContext): Promise<void> 
 • Active Referrals: ${stats.referralCount}
 • Total Referral Earnings: ${formatCurrency(stats.referralEarnings)}
 
+<b>Withdrawal Info:</b>
+• Minimum to Withdraw: ${formatCurrency(minimumThreshold)}
+• Status: ${canWithdraw ? `✅ Ready to Withdraw!` : `⏳ Need ${formatCurrency(amountNeeded)} more`}
+
 <b>Bonus Details:</b>
+• Bonus Percentage: ${bonusPercentage}%
 • Total Bonuses Earned: ${stats.bonusesList.length}
 • Average Bonus: ${stats.bonusesList.length > 0 ? formatCurrency(stats.referralEarnings / stats.bonusesList.length) : formatCurrency(0)}`;
 
@@ -2418,9 +2427,8 @@ Share your referral code with friends to earn bonuses when they invest.`;
     const { InlineKeyboard } = await import("grammy");
     const keyboard = new InlineKeyboard();
 
-    if (stats.referralEarnings > 0) {
-      keyboard.text("💸 Withdraw Bonus", "withdraw_referral_bonus").row();
-    }
+    // Always show withdrawal button if they have any earnings
+    keyboard.text("💸 Withdraw Bonus", "withdraw_referral_bonus").row();
 
     keyboard.text("📋 Share Code", "share_referral_code").row();
     keyboard.text("👤 Back to Profile", "view_profile").row();
@@ -2446,6 +2454,7 @@ export async function handleWithdrawReferralBonus(ctx: SessionContext): Promise<
 
   try {
     const user = await UserService.getUserById(ctx.session.userId);
+    const minimumThreshold = await ReferralService.getMinimumReferralThreshold();
 
     if (!user || !user.referralEarnings || user.referralEarnings <= 0) {
       await ctx.reply("❌ No referral earnings available to withdraw", {
@@ -2459,10 +2468,15 @@ export async function handleWithdrawReferralBonus(ctx: SessionContext): Promise<
       availableAmount: user.referralEarnings,
     };
 
+    const canWithdraw = user.referralEarnings >= minimumThreshold;
+    const message = `<b>💸 Withdraw Referral Bonus</b>\n\n
+💰 Total Referral Earnings: ${formatCurrency(user.referralEarnings)}\n
+📊 Minimum Required: ${formatCurrency(minimumThreshold)}\n
+${canWithdraw ? "✅ You can withdraw now!" : `⏳ You need ${formatCurrency(minimumThreshold - user.referralEarnings)} more to withdraw.`}\n\n
+${canWithdraw ? "Enter the amount you want to withdraw (or type \"max\" for all):" : "Keep earning to reach the minimum amount!"}`;
+
     await ctx.reply(
-      `<b>💸 Withdraw Referral Bonus</b>\n\n
-💰 Total Referral Earnings: ${formatCurrency(user.referralEarnings)}\n\n
-Enter the amount you want to withdraw (or type "max" for all):`,
+      message,
       {
         parse_mode: "HTML",
         reply_markup: { remove_keyboard: true },
@@ -2505,9 +2519,12 @@ export async function handleReferralBonusAmountInput(ctx: SessionContext): Promi
       return;
     }
 
-    if (amount < config.MIN_WITHDRAWAL_AMOUNT) {
+    // Get minimum referral threshold from settings
+    const minimumReferralThreshold = await ReferralService.getMinimumReferralThreshold();
+    
+    if (amount < minimumReferralThreshold) {
       await ctx.reply(
-        `❌ Minimum withdrawal is ${formatCurrency(config.MIN_WITHDRAWAL_AMOUNT)}`
+        `❌ Minimum referral bonus withdrawal is ${formatCurrency(minimumReferralThreshold)}\n\nYou need ${formatCurrency(minimumReferralThreshold - amount)} more to withdraw.`
       );
       return;
     }
@@ -2558,9 +2575,14 @@ export async function handleConfirmReferralWithdrawal(ctx: SessionContext): Prom
       return;
     }
 
-    if (!user.bankDetails) {
+    // Check if user has a wallet configured
+    const userWallets = await prisma.wallet.findMany({
+      where: { userId: userId },
+    });
+
+    if (!userWallets || userWallets.length === 0) {
       await ctx.reply(
-        `❌ Bank details not found. Please add your bank details first before withdrawing.\n\nTap "⚙️ Settings" → "🏦 Bank Details" to add them.`,
+        `❌ No wallet found. Please add a crypto wallet first before withdrawing.\n\nTap "⚙️ Settings" → "💰 My Wallets" to add one.`,
         { parse_mode: "HTML" }
       );
       return;

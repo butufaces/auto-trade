@@ -249,7 +249,7 @@ Dashboard shows:
 - ✅ **Share referral code** with friends
 - ✅ **Earn commission** when referrals invest
 - ✅ **Bonus percentage**: 5% (configurable: `REFERRAL_BONUS_PERCENTAGE`)
-- ✅ **Minimum payout**: $1000 (configurable: `MINIMUM_REFERRAL_PAYOUT`)
+- ✅ **Minimum withdrawal**: $100 (configurable: `MINIMUM_REFERRAL_WITHDRAWAL_AMOUNT`)
 - ✅ **Tracked referrals**:
   - Referral count
   - Total referral earnings
@@ -258,15 +258,15 @@ Dashboard shows:
 ### 2. **Referral Bonus System**
 - ✅ **Automatic bonus on referral investment**
 - ✅ Bonus tracked separately from investment earnings
-- ✅ **Bonuses "locked" initially** (optional approval phase)
-- ✅ **Withdraw referral bonus** anytime after minimum reached
+- ✅ **Withdraw referral bonus** when balance reaches minimum ($100)
+- ✅ **Minimum withdrawal amount**: $100 (editable by admin)
 - ✅ **Same withdrawal process** as investment withdrawal
 - ✅ **Bonus tracking:**
-  - Status: PENDING, APPROVED, WITHDRAWN
+  - Status: CREDITED, WITHDRAWN
   - Referrer info
   - Amount earned
   - Referral investment amount
-  - Approval notes
+  - Withdrawal date
 
 ### 3. **View My Referrals**
 Dashboard shows:

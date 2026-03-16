@@ -1076,11 +1076,13 @@ export async function handleReferralSettings(ctx: SessionContext): Promise<void>
   
   try {
     const bonusPercentage = await ReferralService.getBonusPercentage();
+    const minimumThreshold = await ReferralService.getMinimumReferralThreshold();
     const analytics = await ReferralService.getReferralAnalytics();
 
     const message = `<b>💰 Referral Bonus Settings</b>\n\n
 <b>Current Configuration:</b>
 • Bonus Percentage: ${bonusPercentage}%
+• Minimum Withdrawal: ${formatCurrency(minimumThreshold)}
 • Total Bonuses Distributed: ${formatCurrency(analytics.totalBonusesDistributed)}
 • Total Bonus Records: ${analytics.totalBonusRecords}
 
@@ -1102,6 +1104,7 @@ export async function handleReferralSettings(ctx: SessionContext): Promise<void>
       reply_markup: {
         inline_keyboard: [
           [{ text: "✏️ Edit Percentage", callback_data: "edit_referral_percentage" }],
+          [{ text: "💵 Edit Min Threshold", callback_data: "edit_minimum_referral_withdrawal" }],
           [{ text: "📊 View Analytics", callback_data: "view_referral_analytics" }],
           [{ text: "🏠 Back to Admin", callback_data: "back_to_admin_menu" }]
         ]
@@ -1170,6 +1173,72 @@ This will apply to all new investments going forward.`,
     delete ctx.session.editingReferralBonus;
   } catch (error) {
     logger.error("Error updating referral bonus:", error);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Start editing minimum referral withdrawal threshold
+ */
+export async function handleEditMinimumReferralThresholdStart(ctx: SessionContext): Promise<void> {
+  logger.info(`Admin starting to edit minimum referral withdrawal threshold`);
+  
+  const currentThreshold = await ReferralService.getMinimumReferralThreshold();
+  
+  await ctx.reply(
+    `<b>Edit Minimum Referral Withdrawal Threshold</b>\n\n
+Current: ${formatCurrency(currentThreshold)}\n
+Please enter the new minimum amount (in dollars, e.g., 100):`,
+    {
+      parse_mode: "HTML",
+      reply_markup: { remove_keyboard: true },
+    }
+  );
+
+  ctx.session.editingReferralThreshold = true;
+}
+
+/**
+ * Process new minimum referral withdrawal threshold
+ */
+export async function handleEditMinimumReferralThresholdInput(ctx: SessionContext): Promise<void> {
+  if (!ctx.message || !ctx.message.text) {
+    await ctx.reply("❌ Please send a text message with the amount");
+    return;
+  }
+
+  const input = ctx.message.text;
+
+  try {
+    const newThreshold = parseFloat(input);
+
+    if (isNaN(newThreshold) || newThreshold < 0) {
+      await ctx.reply(
+        "❌ Invalid amount. Please enter a positive number:"
+      );
+      return;
+    }
+
+    await ReferralService.updateMinimumReferralThreshold(newThreshold, ctx.session.userId);
+
+    await ctx.reply(
+      `✅ <b>Minimum Referral Threshold Updated!</b>\n\n
+New Minimum: ${formatCurrency(newThreshold)}\n
+Users can only withdraw referral bonuses when they reach this amount.`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💰 Referral Settings", callback_data: "referral_settings" }],
+            [{ text: "🏠 Admin Panel", callback_data: "admin_panel" }]
+          ]
+        }
+      }
+    );
+
+    delete ctx.session.editingReferralThreshold;
+  } catch (error) {
+    logger.error("Error updating minimum referral threshold:", error);
     await ctx.reply(`❌ Error: ${(error as Error).message}`);
   }
 }
