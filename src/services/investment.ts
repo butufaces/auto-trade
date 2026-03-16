@@ -375,12 +375,8 @@ export class InvestmentService {
     const hoursElapsed = msElapsed / (1000 * 60 * 60);
     const secondsElapsed = msElapsed / 1000;
 
-    // Calculate profit accumulated since investment started
-    // Cap at totalProfit to prevent exceeding expectedReturn
-    const profitAccumulatedSinceStart = Math.min(totalProfit, dailyRate * daysElapsed);
-
-    // Combined current value
-    const currentValue = investment.amount + investment.totalAccruedProfit + profitAccumulatedSinceStart;
+    // Current value is principal + already-accrued profit (tracked daily via applyDailyAccrual)
+    const currentValue = investment.amount + investment.totalAccruedProfit;
 
     // Time remaining (use floor for consistency with daysElapsed calculation)
     const msRemaining = maturityDate.getTime() - now.getTime();
