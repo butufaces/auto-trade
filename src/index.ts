@@ -226,6 +226,8 @@ import {
   handleHelpArticleInput,
   handleSaveHelpArticle,
   handleEditHelpArticle,
+  handleStartEditHelpArticleField,
+  handleEditHelpArticleFieldInput,
   handleDeleteHelpArticleConfirm,
   handleDeleteHelpArticle,
   handleToggleHelpArticleStatus,
@@ -428,6 +430,10 @@ interface SessionData {
     category?: string;
     articleId?: string;
   } | null;
+  editingHelpArticle?: {
+    articleId: string;
+    field: "title" | "content" | "icon" | "category";
+  };
 }
 
 // Create bot
@@ -986,6 +992,16 @@ bot.on("callback_query", async (ctx) => {
 
     if (data === "help_save_article") {
       return handleSaveHelpArticle(ctx);
+    }
+
+    // Handle help article field editing - MUST come before generic help_edit_
+    if (data.startsWith("help_edit_field_")) {
+      // Format: help_edit_field_{articleId}_{fieldName}
+      const parts = data.replace("help_edit_field_", "").split("_");
+      const fieldName = parts.pop() || "";
+      const articleId = parts.join("_"); // Re-join in case articleId contains underscores
+      
+      return handleStartEditHelpArticleField(ctx, articleId, fieldName as any);
     }
 
     if (data.startsWith("help_edit_")) {
@@ -2134,6 +2150,7 @@ bot.on("message", async (ctx) => {
       session.editingReferralBonus ||
       session.editingReferralThreshold ||
       session.helpArticleCreation ||
+      session.editingHelpArticle ||
       session.pendingWallet;
 
     // If this is not a workflow message, don't handle it here
@@ -2494,6 +2511,11 @@ bot.on("message", async (ctx) => {
     // Help article creation workflow
     if (session.helpArticleCreation) {
       return handleHelpArticleInput(ctx, text);
+    }
+
+    // Help article field editing workflow
+    if (session.editingHelpArticle) {
+      return handleEditHelpArticleFieldInput(ctx, text);
     }
 
     // Handle text-based back buttons as fallback

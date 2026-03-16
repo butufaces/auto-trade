@@ -10,6 +10,10 @@ declare module "grammy" {
       category?: string;
       articleId?: string;
     } | null;
+    editingHelpArticle?: {
+      articleId: string;
+      field: "title" | "content" | "icon" | "category";
+    };
   }
 }
 

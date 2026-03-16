@@ -118,6 +118,13 @@ export async function handleAddHelpArticleStart(
 ): Promise<void> {
   logger.info(`📄 PAGE SHOWN: Add Help Article`);
 
+  // Clear any other workflow states to prevent conflicts
+  delete ctx.session.editingReferralThreshold;
+  delete ctx.session.editingReferralBonus;
+  delete ctx.session.approveInvestmentId;
+  delete ctx.session.rejectInvestmentId;
+  delete ctx.session.editingAccountId;
+
   ctx.session.helpArticleCreation = {
     step: "title",
   };
@@ -335,6 +342,143 @@ export async function handleEditHelpArticle(
   } catch (error) {
     logger.error("Error loading article for editing:", error);
     await ctx.reply("❌ Failed to load article");
+  }
+}
+
+/**
+ * Start editing a specific field of a help article
+ */
+export async function handleStartEditHelpArticleField(
+  ctx: SessionContext,
+  articleId: string,
+  fieldName: string
+): Promise<void> {
+  logger.info(`📝 Starting to edit field: ${fieldName} for article: ${articleId}`);
+
+  // Clear any other workflow states to prevent conflicts
+  delete ctx.session.editingReferralThreshold;
+  delete ctx.session.editingReferralBonus;
+  delete ctx.session.approveInvestmentId;
+  delete ctx.session.rejectInvestmentId;
+  delete ctx.session.editingAccountId;
+
+  const HelpArticleService = (await import(
+    "../services/helpArticle.js"
+  )).default;
+
+  try {
+    const article = await HelpArticleService.getArticleById(articleId);
+
+    if (!article) {
+      await ctx.reply("❌ Article not found");
+      return;
+    }
+
+    const fieldLabels: any = {
+      title: "Title",
+      content: "Content",
+      icon: "Icon",
+      category: "Category",
+    };
+
+    ctx.session.editingHelpArticle = {
+      articleId,
+      field: fieldName,
+    };
+
+    let prompt = `<b>✏️ Edit ${fieldLabels[fieldName]}</b>\n\n`;
+    
+    if (fieldName === "title") {
+      prompt += `Current: ${article.title}\n\nEnter new title:`;
+    } else if (fieldName === "content") {
+      prompt += `Current content:\n${article.content}\n\nEnter new content:\n(Use \\n for line breaks)`;
+    } else if (fieldName === "icon") {
+      prompt += `Current: ${article.icon}\n\nChoose a new icon emoji:\n` +
+        `🎓 = Learning/How-to\n` +
+        `💸 = Money/Withdraw\n` +
+        `💳 = Payment\n` +
+        `🔒 = Security\n` +
+        `❓ = FAQ/Questions\n` +
+        `💰 = Account/Wallet`;
+    } else if (fieldName === "category") {
+      prompt += `Current: ${article.category || "Uncategorized"}\n\nEnter new category (or leave blank for Uncategorized):`;
+    }
+
+    await ctx.reply(prompt, {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [[{ text: "❌ Cancel", callback_data: `help_edit_${articleId}` }]],
+      },
+    });
+  } catch (error) {
+    logger.error("Error starting field edit:", error);
+    await ctx.reply("❌ Failed to start editing");
+  }
+}
+
+/**
+ * Process field edit input for help articles
+ */
+export async function handleEditHelpArticleFieldInput(
+  ctx: SessionContext,
+  newValue: string
+): Promise<void> {
+  const editing = ctx.session.editingHelpArticle;
+
+  if (!editing) {
+    return;
+  }
+
+  const HelpArticleService = (await import(
+    "../services/helpArticle.js"
+  )).default;
+
+  try {
+    const { articleId, field } = editing;
+    
+    const updateData: any = {};
+    
+    if (field === "title") {
+      updateData.title = newValue.trim();
+    } else if (field === "content") {
+      updateData.content = newValue.replace(/\\n/g, "\n");
+    } else if (field === "icon") {
+      updateData.icon = newValue.trim() || "📋";
+    } else if (field === "category") {
+      updateData.category = newValue.trim() || null;
+    }
+
+    const article = await HelpArticleService.updateArticle(articleId, updateData);
+
+    delete ctx.session.editingHelpArticle;
+
+    const fieldLabels: any = {
+      title: "Title",
+      content: "Content",
+      icon: "Icon",
+      category: "Category",
+    };
+
+    await ctx.reply(
+      `<b>✅ ${fieldLabels[field]} Updated!</b>\n\n` +
+      `Article: ${article.title}\n\n` +
+      `Changes saved.`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✏️ Continue Editing", callback_data: `help_edit_${articleId}` }],
+            [{ text: "📚 View All", callback_data: "help_view_all" }],
+          ],
+        },
+      }
+    );
+
+    logger.info(`Help article field updated: ${articleId} - ${field}`);
+  } catch (error) {
+    logger.error("Error updating help article field:", error);
+    delete ctx.session.editingHelpArticle;
+    await ctx.reply("❌ Failed to update field");
   }
 }
 
