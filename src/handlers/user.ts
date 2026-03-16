@@ -182,20 +182,9 @@ Once verified, you'll be able to invest immediately! 🚀`,
     return;
   }
 
-  let message = "<b>📦 Available Investment Packages</b>\n\n";
-
-  for (const pkg of packages) {
-    message += `<b>${pkg.icon} ${pkg.name}</b>\n`;
-    message += `💰 ${formatCurrency(pkg.minAmount)} - ${formatCurrency(pkg.maxAmount)}\n`;
-    message += `📈 ROI: ${pkg.roiPercentage}% | Duration: ${pkg.duration} days\n`;
-    message += `⚠️ Risk: ${pkg.riskLevel}\n`;
-    if (pkg.description) message += `📝 ${pkg.description}\n`;
-    message += "\n";
-  }
-
   const keyboard = createPackageKeyboard(packages);
 
-  await ctx.reply(message, {
+  await ctx.reply("📦 Select a Package to Invest", {
     reply_markup: keyboard,
     parse_mode: "HTML",
   });
@@ -508,58 +497,20 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
       parse_mode: "HTML",
     });
 
-    // Show investment buttons - ALL investments (active, matured, completed)
-    const allInvestmentsWithButtons = [...activeInvestments, ...maturedInvestments, ...completedInvestments];
-    if (allInvestmentsWithButtons.length > 0) {
-      const { InlineKeyboard } = await import("grammy");
-      const keyboard = new InlineKeyboard();
+    // Show navigation buttons only
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
 
-      // Active trades
-      if (activeInvestments.length > 0) {
-        keyboard.text("🔵 ACTIVE TRADES", "noop");
-        keyboard.row();
-        for (const inv of activeInvestments) {
-          const statusEmoji = "🟢";
-          keyboard.text(
-            `${statusEmoji} ${inv.package.name} - ${formatCurrency(inv.amount)}`,
-            `view_investment_${inv.id}`
-          );
-          keyboard.row();
-        }
-      }
+    // My Trades button - navigate to trading dashboard
+    keyboard.text("💼 My Trades", "view_my_trades");
+    keyboard.row();
 
-      // Matured investments
-      if (maturedInvestments.length > 0) {
-        keyboard.text("🟢 MATURED (Ready to Withdraw)", "noop");
-        keyboard.row();
-        for (const inv of maturedInvestments) {
-          keyboard.text(
-            `✨ ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)}`,
-            `view_investment_${inv.id}`
-          );
-          keyboard.row();
-        }
-      }
+    // Back button
+    keyboard.text("🔙 Back", "back_to_menu");
 
-      // Completed investments
-      if (completedInvestments.length > 0) {
-        keyboard.text("✅ COMPLETED", "noop");
-        keyboard.row();
-        for (const inv of completedInvestments) {
-          keyboard.text(
-            `✓ ${inv.package.name} - ${formatCurrency(inv.amount + inv.totalProfit)}`,
-            `view_investment_${inv.id}`
-          );
-          keyboard.row();
-        }
-      }
-
-      keyboard.text("🔙 Back", "back_to_menu");
-
-      await ctx.reply("📊 All Your Trades:", {
-        reply_markup: keyboard,
-      });
-    }
+    await ctx.reply("Navigate to manage your trades:", {
+      reply_markup: keyboard,
+    });
   } catch (error) {
     await ctx.reply(`❌ Failed to load portfolio: ${(error as Error).message}`);
   }
@@ -1033,14 +984,27 @@ export async function handleConfirmWalletForWithdrawalInput(ctx: SessionContext,
     ctx.session.withdrawalData.walletAddress = wallet.walletAddress;
     ctx.session.withdrawalData.blockchain = wallet.blockchain;
     ctx.session.withdrawalData.cryptocurrency = wallet.cryptocurrency;
+    // Set withdrawal amount to full available amount (no custom amount selection)
+    ctx.session.withdrawalData.withdrawAmount = ctx.session.withdrawalData.availableAmount;
 
-    const message = `<b>💰 Enter Withdrawal Amount</b>\n\nWallet: <b>${wallet.label || wallet.blockchain}</b>\n\nAddress: <code>${wallet.walletAddress.substring(0, 20)}...</code>\n\nAvailable for Withdrawal: ${formatCurrency(ctx.session.withdrawalData.availableAmount)}\n\nEnter the amount you want to withdraw (or type "max" for all):`;
+    // Show confirmation directly (skip amount input step)
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
+    keyboard.text("✅ Confirm", "confirm_withdrawal_amount").row();
+    keyboard.text("❌ Cancel", "cancel_withdrawal").row();
+
+    let message = `<b>💰 Confirm Withdrawal</b>\n\n`;
+    message += `📦 <b>Package:</b> ${ctx.session.withdrawalData.packageName}\n`;
+    message += `💰 <b>Principal:</b> ${formatCurrency(ctx.session.withdrawalData.principal)}\n`;
+    message += `📈 <b>Profit:</b> ${formatCurrency(ctx.session.withdrawalData.profit)}\n`;
+    message += `💸 <b>Total Amount:</b> ${formatCurrency(ctx.session.withdrawalData.withdrawAmount)}\n\n`;
+    message += `💳 <b>Wallet:</b> ${wallet.label || wallet.blockchain}\n`;
+    message += `🔗 <b>Address:</b> <code>${wallet.walletAddress.substring(0, 20)}...</code>\n\n`;
+    message += `Confirm this withdrawal?`;
 
     await ctx.reply(message, {
       parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [[{ text: "❌ Cancel", callback_data: `invest_details_${ctx.session.withdrawalData.investmentId}` }]],
-      },
+      reply_markup: keyboard,
     });
   } catch (error) {
     logger.error("Error confirming wallet for withdrawal:", error);
@@ -2119,7 +2083,7 @@ export async function handleProcessWithdrawal(
       return;
     }
 
-    if (investment.userId !== ctx.from?.id?.toString()) {
+    if (investment.userId !== ctx.session.userId) {
       await ctx.reply("❌ Unauthorized access");
       return;
     }
@@ -2211,7 +2175,12 @@ Amount: ${formatCurrency(withdrawAmount)}\n\n
 A verification link has been sent to <code>${user.email}</code>\n\n
 Please click the link in the email to verify and complete your withdrawal request.`,
         {
-          reply_markup: mainMenuKeyboard,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📧 Resend Verification", callback_data: "resend_withdrawal_verification" }],
+              [{ text: "🔙 Back to My Trades", callback_data: "view_my_trades" }],
+            ],
+          },
           parse_mode: "HTML",
         }
       );

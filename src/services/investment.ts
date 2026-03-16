@@ -565,7 +565,7 @@ export class InvestmentService {
           investmentId: `REF_BONUS_${userId}_${Date.now()}`, // Unique ID for referral bonus
           userId,
           amount,
-          status: "PENDING",
+          status: "UNVERIFIED",
           emailVerified: false,
           emailVerificationToken: token,
           emailVerificationExpiry: expiry,
@@ -588,9 +588,14 @@ export class InvestmentService {
       throw new Error("Unauthorized: Investment does not belong to this user");
     }
 
-    if (amount > investment.availableWithdrawable) {
+    // For MATURED investments, allow withdrawal of full amount (principal + all profit)
+    const maxWithdrawable = investment.status === "MATURED" 
+      ? investment.amount + investment.totalProfit 
+      : investment.availableWithdrawable;
+
+    if (amount > maxWithdrawable) {
       throw new Error(
-        `Insufficient withdrawable balance. Available: ${investment.availableWithdrawable}`
+        `Insufficient withdrawable balance. Available: ${maxWithdrawable}`
       );
     }
 
@@ -604,7 +609,7 @@ export class InvestmentService {
     const anyPendingWithdrawal = await prisma.withdrawalRequest.findFirst({
       where: {
         userId,
-        status: { in: ["PENDING", "PROCESSING", "APPROVED"] },
+        status: { in: ["UNVERIFIED", "PENDING", "PROCESSING", "APPROVED"] },
       },
     });
 
@@ -625,13 +630,13 @@ export class InvestmentService {
 
     // Handle existing withdrawal requests
     if (existingWithdrawal) {
-      if (existingWithdrawal.status === "PENDING" && !existingWithdrawal.emailVerified) {
-        // If unverified pending exists, delete it to allow retry with new token
+      if (existingWithdrawal.status === "UNVERIFIED" || (existingWithdrawal.status === "PENDING" && !existingWithdrawal.emailVerified)) {
+        // If unverified exists, delete it to allow retry with new token
         logger.info(`Deleting duplicate unverified withdrawal request ${existingWithdrawal.id} for investment ${investmentId}`);
         await prisma.withdrawalRequest.delete({
           where: { id: existingWithdrawal.id },
         });
-      } else if (existingWithdrawal.status === "PENDING" && existingWithdrawal.emailVerified) {
+      } else if ((existingWithdrawal.status === "PENDING" || existingWithdrawal.status === "UNVERIFIED") && existingWithdrawal.emailVerified) {
         // If already email verified and pending admin approval, don't allow creating another
         throw new Error("A withdrawal request for this investment is already pending admin approval. Please wait for approval or rejection.");
       } else if (existingWithdrawal.status === "APPROVED") {
@@ -664,7 +669,7 @@ export class InvestmentService {
         walletAddress: walletAddress || null,
         blockchain: blockchain || null,
         cryptocurrency: cryptocurrency || null,
-        status: "PENDING",
+        status: "UNVERIFIED",
         emailVerificationToken: token,
         emailVerificationExpiry: expiry,
         emailVerified: false,
@@ -703,11 +708,12 @@ export class InvestmentService {
       throw new Error("Invalid or expired verification token");
     }
 
-    // Mark as email verified
+    // Mark as email verified and change status to PENDING
     const updated = await prisma.withdrawalRequest.update({
       where: { id: withdrawalRequest.id },
       data: {
         emailVerified: true,
+        status: "PENDING",
         emailVerificationToken: null,
         emailVerificationExpiry: null,
       },
@@ -771,7 +777,7 @@ export class InvestmentService {
     }
 
     // Update investment totalWithdrawn and decrement availableWithdrawable
-    await prisma.investment.update({
+    const updatedInvestment = await prisma.investment.update({
       where: { id: withdrawalRequest.investmentId },
       data: {
         totalWithdrawn: {
@@ -782,6 +788,21 @@ export class InvestmentService {
         },
       },
     });
+
+    // Check if user has fully withdrawn the investment (principal + all profit)
+    const totalFundsAvailable = updatedInvestment.amount + updatedInvestment.totalProfit;
+    const isFullyWithdrawn = updatedInvestment.totalWithdrawn >= totalFundsAvailable;
+
+    // Update investment status to COMPLETED only if fully withdrawn
+    if (isFullyWithdrawn) {
+      await prisma.investment.update({
+        where: { id: withdrawalRequest.investmentId },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+    }
 
     // Mark withdrawal as completed
     const updated = await prisma.withdrawalRequest.update({
@@ -796,7 +817,7 @@ export class InvestmentService {
     // Update user stats to reflect the withdrawal
     await UserService.updateUserStats(withdrawalRequest.userId);
 
-    logger.info(`Withdrawal request completed: ${withdrawalId}`);
+    logger.info(`Withdrawal request completed: ${withdrawalId} (Fully withdrawn: ${isFullyWithdrawn})`);
     return updated;
   }
 

@@ -364,7 +364,9 @@ export async function handlePendingDeposits(ctx: SessionContext): Promise<void> 
 
     if (pendingDeposits.length === 0) {
       await ctx.reply(
-        `<b>💳 Pending Deposits</b>\n\nNo pending deposits awaiting payment confirmation.`,
+        `<b>💳 Pending Deposits</b>\n\n
+No pending deposits awaiting payment confirmation.\n\n
+⏰ <b>Note:</b> PENDING trades are automatically cleared after 24 hours if no payment is confirmed.`,
         {
           parse_mode: "HTML",
           reply_markup: {
@@ -377,7 +379,8 @@ export async function handlePendingDeposits(ctx: SessionContext): Promise<void> 
       return;
     }
 
-    let message = `<b>💳 Pending Deposits (${count} total) - Page ${page}/${totalPages}</b>\n\n`;
+    let message = `<b>💳 Pending Deposits (${count} total) - Page ${page}/${totalPages}</b>\n\n
+⏰ <b>Auto-Clear:</b> Trades are automatically cleared after 24 hours if unconfirmed.\n\n`;
 
     for (const deposit of pendingDeposits) {
       message += `<b>${deposit.package.icon} ${deposit.package.name}</b>\n`;

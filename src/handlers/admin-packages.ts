@@ -143,6 +143,8 @@ What would you like to edit?`;
           [{ text: "⚠️ Risk Level", callback_data: `edit_pkg_riskLevel_${packageId}` }],
           [{ text: "📝 Description", callback_data: `edit_pkg_description_${packageId}` }],
           [{ text: "🔄 Toggle Status", callback_data: `edit_pkg_status_${packageId}` }],
+          [{ text: "✏️ Rename Package", callback_data: `rename_package_${packageId}` }],
+          [{ text: "🗑️ Delete Package", callback_data: `delete_package_${packageId}` }],
           [{ text: "🔙 Back", callback_data: "manage_packages" }],
         ],
       },
@@ -444,6 +446,174 @@ export async function handleCreatePackage(
     ctx.session.addPackageStep = undefined;
   } catch (error) {
     logger.error("Error creating package:", error);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`, { reply_markup: adminMenuKeyboard });
+  }
+}
+
+/**
+ * Start renaming a package
+ */
+export async function handleRenamePackageStart(ctx: SessionContext, packageId: string): Promise<void> {
+  try {
+    const pkg = await PackageService.getPackageById(packageId);
+
+    if (!pkg) {
+      await ctx.reply("❌ Package not found");
+      return;
+    }
+
+    ctx.session.renamePackageId = packageId;
+    ctx.session.renamePackageStep = "name";
+
+    await ctx.reply(
+      `<b>✏️ Rename Package</b>\n\n
+Current name: <b>${pkg.name}</b>\n\n
+Please type the new name for this package:`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [[{ text: "❌ Cancel", callback_data: `edit_package_${packageId}` }]],
+        },
+      }
+    );
+  } catch (error) {
+    logger.error("Error starting package rename:", error);
+    await ctx.reply("❌ Error", { reply_markup: adminMenuKeyboard });
+  }
+}
+
+/**
+ * Confirm and save renamed package
+ */
+export async function handleConfirmPackageRename(ctx: SessionContext): Promise<void> {
+  try {
+    const packageId = ctx.session.renamePackageId;
+    const newName = ctx.message?.text?.trim();
+
+    if (!packageId || !newName) {
+      await ctx.reply("❌ Invalid input");
+      return;
+    }
+
+    const pkg = await PackageService.getPackageById(packageId);
+    if (!pkg) {
+      await ctx.reply("❌ Package not found");
+      return;
+    }
+
+    // Update package name
+    const updated = await prisma.package.update({
+      where: { id: packageId },
+      data: { name: newName },
+    });
+
+    await ctx.reply(
+      `✅ <b>Package Renamed!</b>\n\n
+Old name: ${pkg.name}\n
+New name: <b>${updated.name}</b>`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✏️ Edit Package", callback_data: `edit_package_${packageId}` }],
+            [{ text: "📦 Back to Packages", callback_data: "manage_packages" }],
+            [{ text: "🔙 Back to Dashboard", callback_data: "back_to_admin" }],
+          ],
+        },
+      }
+    );
+
+    delete ctx.session.renamePackageId;
+    delete ctx.session.renamePackageStep;
+  } catch (error) {
+    logger.error("Error renaming package:", error);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`, { reply_markup: adminMenuKeyboard });
+  }
+}
+
+/**
+ * Delete package - show confirmation
+ */
+export async function handleDeletePackageStart(ctx: SessionContext, packageId: string): Promise<void> {
+  try {
+    const pkg = await PackageService.getPackageById(packageId);
+
+    if (!pkg) {
+      await ctx.reply("❌ Package not found");
+      return;
+    }
+
+    // Count active investments for this package
+    const investmentCount = await prisma.investment.count({
+      where: { packageId },
+    });
+
+    let confirmMessage = `<b>⚠️ Delete Package?</b>\n\n
+📦 <b>${pkg.icon} ${pkg.name}</b>\n
+💰 ${formatCurrency(pkg.minAmount)} - ${formatCurrency(pkg.maxAmount)}\n
+📈 ROI: ${pkg.roiPercentage}%\n
+📅 Duration: ${pkg.duration} days\n\n`;
+
+    if (investmentCount > 0) {
+      confirmMessage += `⚠️ <b>Warning:</b> This package has <b>${investmentCount}</b> active investments.\n`;
+      confirmMessage += `Deleting this package will NOT affect existing investments, but users won't be able to invest in it anymore.\n\n`;
+    }
+
+    confirmMessage += `<b>Are you sure?</b>`;
+
+    ctx.session.deletePackageId = packageId;
+
+    await ctx.reply(confirmMessage, {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "✅ Confirm Delete", callback_data: `confirm_delete_package_${packageId}` },
+            { text: "❌ Cancel", callback_data: `edit_package_${packageId}` },
+          ],
+        ],
+      },
+    });
+  } catch (error) {
+    logger.error("Error starting package deletion:", error);
+    await ctx.reply("❌ Error", { reply_markup: adminMenuKeyboard });
+  }
+}
+
+/**
+ * Confirm and delete package
+ */
+export async function handleConfirmDeletePackage(ctx: SessionContext, packageId: string): Promise<void> {
+  try {
+    const pkg = await PackageService.getPackageById(packageId);
+
+    if (!pkg) {
+      await ctx.reply("❌ Package not found");
+      return;
+    }
+
+    // Delete package
+    await prisma.package.delete({
+      where: { id: packageId },
+    });
+
+    await ctx.reply(
+      `✅ <b>Package Deleted!</b>\n\n
+🗑️ "${pkg.name}" has been removed from the system.`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📦 Back to Packages", callback_data: "manage_packages" }],
+            [{ text: "🔙 Back to Dashboard", callback_data: "back_to_admin" }],
+          ],
+        },
+      }
+    );
+
+    delete ctx.session.deletePackageId;
+  } catch (error) {
+    logger.error("Error deleting package:", error);
     await ctx.reply(`❌ Error: ${(error as Error).message}`, { reply_markup: adminMenuKeyboard });
   }
 }

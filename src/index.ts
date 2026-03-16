@@ -55,7 +55,6 @@ import {
   handleProcessBankDetails,
   handleConfirmBankDetails,
   handleViewInvestmentDetails,
-  handleProcessWithdrawal,
   handleConfirmWithdrawalAmount,
   handleCompleteWithdrawal,
   handleNotifications,
@@ -73,6 +72,11 @@ import {
 
 import {
   handleViewMyTrades,
+  handleViewActiveTrades,
+  handleViewReadyToWithdrawTrades,
+  handleViewCompletedTrades,
+  handleViewPendingTrades,
+  handleViewTradeDetails,
 } from "./handlers/user-trades.js";
 
 // Log quick DB sanity info on startup
@@ -299,7 +303,11 @@ interface SessionData {
   rejectInvestmentId?: string;
   investmentPage?: number;
   allInvestmentPage?: number;
-  tradesPage?: number;
+  tradesActivePage?: number;  // My Trades: Active trades pagination
+  tradesReadyToWithdrawPage?: number;  // My Trades: Ready to Withdraw trades pagination
+  tradesCompletedPage?: number;  // My Trades: Completed trades pagination
+  tradesPendingPage?: number;  // My Trades: Pending trades pagination
+  selectedTradeId?: string;  // Currently selected trade for viewing details
   userPage?: number;
   withdrawalPage?: number;
   notificationPage?: number;
@@ -353,6 +361,9 @@ interface SessionData {
   editPackageId?: string;
   editPackageStep?: string;
   editPackageField?: string;
+  renamePackageId?: string;
+  renamePackageStep?: string;
+  deletePackageId?: string;
   editAboutStep?: string;
   editAboutField?: string;
   // Payment-related
@@ -545,14 +556,14 @@ bot.hears("�🔙 Back", handleStart);
 // Admin menu
 bot.hears("👥 Manage Users", requireAdmin, handleManageUsers);
 bot.hears("💰 Manage Investments", requireAdmin, handleManageAllInvestments);
-bot.hears("� Pending Deposits", requireAdmin, handlePendingDeposits);
-bot.hears("�🔗 Manage Withdrawals", requireAdmin, handlePendingWithdrawals);
+bot.hears("📀 Pending Deposits", requireAdmin, handlePendingDeposits);
+bot.hears("🔗 Manage Withdrawals", requireAdmin, handlePendingWithdrawals);
 bot.hears("📢 Announcements", requireAdmin, handleCreateAnnouncement);
 bot.hears("📋 Logs", requireAdmin, handleAdminLogs);
 bot.hears("🎬 Welcome Media", requireAdmin, handleManageWelcomeMedia);
 bot.hears("📦 Manage Packages", requireAdmin, handleManagePackages);
-bot.hears("� Manage Currency", requireAdmin, handleManageCurrency);
-bot.hears("�💳 Payment Accounts", requireAdmin, handleAdminPaymentAccounts);
+bot.hears("💱 Manage Currency", requireAdmin, handleManageCurrency);
+bot.hears("💳 Payment Accounts", requireAdmin, handleAdminPaymentAccounts);
 bot.hears("✅ Payment Verification", requireAdmin, handleAdminPaymentVerification);
 bot.hears("🎁 Referral Settings", requireAdmin, handleReferralSettings);
 
@@ -795,14 +806,105 @@ bot.on("callback_query", async (ctx) => {
       return handleManageAllInvestments(ctx);
     }
 
-    // My Trades pagination
-    if (data === "my_trades_prev_page") {
-      ctx.session.tradesPage = Math.max(1, (ctx.session.tradesPage || 1) - 1);
+    // My Trades - Category selection
+    if (data === "view_trades_active") {
+      ctx.session.tradesActivePage = 1;
+      return handleViewActiveTrades(ctx);
+    }
+
+    if (data === "view_trades_completed") {
+      ctx.session.tradesCompletedPage = 1;
+      return handleViewCompletedTrades(ctx);
+    }
+
+    if (data === "view_trades_pending") {
+      ctx.session.tradesPendingPage = 1;
+      return handleViewPendingTrades(ctx);
+    }
+
+    if (data === "view_trades_ready_to_withdraw") {
+      ctx.session.tradesReadyToWithdrawPage = 1;
+      return handleViewReadyToWithdrawTrades(ctx);
+    }
+
+    // My Trades - Active trades pagination
+    if (data === "trades_active_prev") {
+      ctx.session.tradesActivePage = Math.max(1, (ctx.session.tradesActivePage || 1) - 1);
+      return handleViewActiveTrades(ctx);
+    }
+
+    if (data === "trades_active_next") {
+      ctx.session.tradesActivePage = (ctx.session.tradesActivePage || 1) + 1;
+      return handleViewActiveTrades(ctx);
+    }
+
+    // My Trades - Completed trades pagination
+    if (data === "trades_completed_prev") {
+      ctx.session.tradesCompletedPage = Math.max(1, (ctx.session.tradesCompletedPage || 1) - 1);
+      return handleViewCompletedTrades(ctx);
+    }
+
+    if (data === "trades_completed_next") {
+      ctx.session.tradesCompletedPage = (ctx.session.tradesCompletedPage || 1) + 1;
+      return handleViewCompletedTrades(ctx);
+    }
+
+    // My Trades - Pending trades pagination
+    if (data === "trades_pending_prev") {
+      ctx.session.tradesPendingPage = Math.max(1, (ctx.session.tradesPendingPage || 1) - 1);
+      return handleViewPendingTrades(ctx);
+    }
+
+    if (data === "trades_pending_next") {
+      ctx.session.tradesPendingPage = (ctx.session.tradesPendingPage || 1) + 1;
+      return handleViewPendingTrades(ctx);
+    }
+
+    // My Trades - Ready to Withdraw trades pagination
+    if (data === "trades_ready_to_withdraw_prev") {
+      ctx.session.tradesReadyToWithdrawPage = Math.max(1, (ctx.session.tradesReadyToWithdrawPage || 1) - 1);
+      return handleViewReadyToWithdrawTrades(ctx);
+    }
+
+    if (data === "trades_ready_to_withdraw_next") {
+      ctx.session.tradesReadyToWithdrawPage = (ctx.session.tradesReadyToWithdrawPage || 1) + 1;
+      return handleViewReadyToWithdrawTrades(ctx);
+    }
+
+    // My Trades - Back to category menu
+    if (data === "trades_back_to_menu" || data === "view_my_trades") {
       return handleViewMyTrades(ctx);
     }
 
-    if (data === "my_trades_next_page") {
-      ctx.session.tradesPage = (ctx.session.tradesPage || 1) + 1;
+    // My Trades - View trade details
+    if (data.startsWith("view_trade_")) {
+      const tradeId = data.replace("view_trade_", "");
+      ctx.session.selectedTradeId = tradeId;
+      return handleViewTradeDetails(ctx);
+    }
+
+    // My Trades - Back to category from trade details
+    if (data === "trades_back_to_category") {
+      // Return to the correct category based on the trade's status
+      const tradeId = ctx.session.selectedTradeId;
+      if (tradeId) {
+        const investment = await prisma.investment.findUnique({
+          where: { id: tradeId },
+        });
+        if (investment?.status === "ACTIVE") {
+          ctx.session.tradesActivePage = 1;
+          return handleViewActiveTrades(ctx);
+        } else if (investment?.status === "MATURED") {
+          ctx.session.tradesReadyToWithdrawPage = 1;
+          return handleViewReadyToWithdrawTrades(ctx);
+        } else if (investment?.status === "COMPLETED") {
+          ctx.session.tradesCompletedPage = 1;
+          return handleViewCompletedTrades(ctx);
+        } else if (investment?.status === "PENDING") {
+          ctx.session.tradesPendingPage = 1;
+          return handleViewPendingTrades(ctx);
+        }
+      }
       return handleViewMyTrades(ctx);
     }
 
@@ -1120,6 +1222,24 @@ bot.on("callback_query", async (ctx) => {
       return handleUpdateRiskLevel(ctx, packageId, riskLevel);
     }
 
+    if (data.startsWith("rename_package_")) {
+      const packageId = data.replace("rename_package_", "");
+      const { handleRenamePackageStart } = await import("./handlers/admin-packages.js");
+      return handleRenamePackageStart(ctx, packageId);
+    }
+
+    if (data.startsWith("delete_package_")) {
+      const packageId = data.replace("delete_package_", "");
+      const { handleDeletePackageStart } = await import("./handlers/admin-packages.js");
+      return handleDeletePackageStart(ctx, packageId);
+    }
+
+    if (data.startsWith("confirm_delete_package_")) {
+      const packageId = data.replace("confirm_delete_package_", "");
+      const { handleConfirmDeletePackage } = await import("./handlers/admin-packages.js");
+      return handleConfirmDeletePackage(ctx, packageId);
+    }
+
     // User details
     if (data.startsWith("user_")) {
       const userId = data.replace("user_", "");
@@ -1372,12 +1492,6 @@ bot.on("callback_query", async (ctx) => {
       return handleWithdrawInvestment(ctx, investmentId);
     }
 
-    // GENERIC WITHDRAW HANDLER - catches other withdraw types
-    if (data.startsWith("withdraw_")) {
-      const investmentId = data.replace("withdraw_", "");
-      return handleProcessWithdrawal(ctx, investmentId);
-    }
-
     if (data === "insufficient_funds") {
       return ctx.reply("❌ No funds available to withdraw at this time");
     }
@@ -1571,6 +1685,14 @@ bot.on("callback_query", async (ctx) => {
       return handleShowInvestmentDetails(ctx, investmentId);
     }
 
+    if (data === "investment_pending_payment") {
+      await ctx.reply(
+        "⏳ This investment is awaiting payment confirmation. Once your payment is verified, it will become active and mature normally.\n\n" +
+        "If it's been more than 24 hours, the pending payment may be auto-cleared."
+      );
+      return;
+    }
+
     if (data === "investment_not_matured") {
       await ctx.reply("⏱️ This investment has not matured yet. Please wait until the maturity date to withdraw the full investment.");
       return;
@@ -1593,6 +1715,17 @@ bot.on("callback_query", async (ctx) => {
     if (data === "confirm_crypto_withdrawal") {
       const { handleConfirmCryptoWithdrawal } = await import("./handlers/withdrawalUser.js");
       return handleConfirmCryptoWithdrawal(ctx);
+    }
+
+    if (data === "resend_withdrawal_verification") {
+      const { handleResendWithdrawalVerification } = await import("./handlers/withdrawalUser.js");
+      return handleResendWithdrawalVerification(ctx);
+    }
+
+    // ==================== ADMIN MENU ====================
+
+    if (data === "admin_menu") {
+      return handleAdminPanel(ctx);
     }
 
     // ==================== ADMIN PAYMENT HANDLERS ====================
@@ -1983,6 +2116,7 @@ bot.on("message", async (ctx) => {
       session.editingField ||
       session.editPackageStep ||
       session.addPackageData ||
+      session.renamePackageStep ||
       session.editAboutStep ||
       session.enteringCustomAmountFor ||
       session.withdrawalData ||
@@ -1990,7 +2124,8 @@ bot.on("message", async (ctx) => {
       session.addingPaymentAccount ||
       session.replyingToTicketId ||
       session.editingReferralBonus ||
-      session.helpArticleCreation;
+      session.helpArticleCreation ||
+      session.pendingWallet;
 
     // If this is not a workflow message, don't handle it here
     if (!isWorkflowMessage && ctx.message?.text) {
@@ -2246,6 +2381,12 @@ bot.on("message", async (ctx) => {
 
     if (session.editPackageStep === "enter_description") {
       return handleConfirmPackageUpdate(ctx, text);
+    }
+
+    // Package rename workflow
+    if (session.renamePackageStep === "name") {
+      const { handleConfirmPackageRename } = await import("./handlers/admin-packages.js");
+      return handleConfirmPackageRename(ctx);
     }
 
     // About field editing workflow

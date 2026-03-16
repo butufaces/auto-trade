@@ -248,7 +248,7 @@ export async function handleConfirmCryptoWithdrawal(ctx: SessionContext): Promis
         walletAddress,
         blockchain,
         cryptocurrency,
-        status: "PENDING",
+        status: "UNVERIFIED",
         emailVerificationToken: require("crypto").randomBytes(32).toString("hex"),
         emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
@@ -286,6 +286,12 @@ export async function handleConfirmCryptoWithdrawal(ctx: SessionContext): Promis
       console.error("Failed to send withdrawal verification email:", err);
     });
 
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
+    keyboard.text("📧 Resend Verification", "resend_withdrawal_verification");
+    keyboard.row();
+    keyboard.text("🔙 Back to My Trades", "view_my_trades");
+
     await ctx.reply(
       `📧 <b>Withdrawal Request Created!</b>\n\n
 📝 <b>Withdrawal Details:</b>\n
@@ -296,6 +302,7 @@ Blockchain: ${blockchain}\n\n
 ⏱️ The link expires in ${config.WITHDRAWAL_VERIFICATION_TOKEN_EXPIRY_MINUTES} minutes.`,
       {
         parse_mode: "HTML",
+        reply_markup: keyboard,
       }
     );
 
@@ -309,6 +316,90 @@ Blockchain: ${blockchain}\n\n
     delete ctx.session.withdrawalData;
   } catch (error) {
     logger.error("Error confirming crypto withdrawal:", error);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Resend withdrawal verification email
+ */
+export async function handleResendWithdrawalVerification(ctx: SessionContext): Promise<void> {
+  logger.info(`📧 Resending withdrawal verification email for user ${ctx.session.userId}`);
+
+  try {
+    const userId = ctx.session.userId;
+    const user = await UserService.getUserById(userId);
+
+    if (!user || !user.email) {
+      await ctx.reply("❌ User email not found");
+      return;
+    }
+
+    // Find the most recent unverified withdrawal request
+    const withdrawalRequest = await (prisma as any).withdrawalRequest.findFirst({
+      where: {
+        userId,
+        emailVerified: false,
+        status: "UNVERIFIED",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!withdrawalRequest) {
+      await ctx.reply(
+        `❌ No pending withdrawal verification found.\n\nAll withdrawal requests have been verified or processed.`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "🔙 Back", callback_data: "view_my_trades" }]],
+          },
+        }
+      );
+      return;
+    }
+
+    // Generate new verification token
+    const { token, expiry } = UserService.generateVerificationToken();
+
+    // Update withdrawal request with new token
+    await (prisma as any).withdrawalRequest.update({
+      where: { id: withdrawalRequest.id },
+      data: {
+        emailVerificationToken: token,
+        emailVerificationExpiry: expiry,
+      },
+    });
+
+    // Send verification email
+    const verificationUrl = `${process.env.BOT_WEBHOOK_URL || "http://localhost:3000"}/verify-withdrawal?token=${token}`;
+    EmailService.sendWithdrawalVerificationEmail(
+      user.email,
+      user.firstName || "User",
+      verificationUrl,
+      token
+    ).catch((err: any) => {
+      logger.error("Failed to resend withdrawal verification email:", err);
+    });
+
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
+    keyboard.text("📧 Resend Again", "resend_withdrawal_verification");
+    keyboard.row();
+    keyboard.text("🔙 Back to My Trades", "view_my_trades");
+
+    await ctx.reply(
+      `✅ <b>Verification Email Resent!</b>\n\n
+📧 A new verification link has been sent to: <code>${user.email}</code>\n\n
+<b>Please check your inbox and click the verification link.</b>\n\n
+⏱️ The link expires in ${config.WITHDRAWAL_VERIFICATION_TOKEN_EXPIRY_MINUTES} minutes.`,
+      {
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      }
+    );
+
+    logger.info(`Withdrawal verification email resent for request ${withdrawalRequest.id}`);
+  } catch (error) {
+    logger.error("Error resending withdrawal verification:", error);
     await ctx.reply(`❌ Error: ${(error as Error).message}`);
   }
 }

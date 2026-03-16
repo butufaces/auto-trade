@@ -72,6 +72,16 @@ export function startScheduledTasks(bot: any): void {
     }
   });
 
+  // Cleanup old PENDING trades (every hour)
+  cron.schedule("0 * * * *", async () => {
+    try {
+      logger.info("Running cleanup for old PENDING trades...");
+      await cleanupOldPendingTrades();
+    } catch (error) {
+      logger.error("Error cleaning up old PENDING trades:", error);
+    }
+  });
+
   logger.info("✅ Scheduled tasks started");
 }
 
@@ -187,6 +197,50 @@ You can start a new investment anytime. Click button below to retry.
     }
   } catch (error) {
     logger.error(`[SCHEDULER] Error in checkExpiredPayments:`, error);
+  }
+}
+
+/**
+ * Cleanup old PENDING trades (delete trades older than 24 hours)
+ */
+async function cleanupOldPendingTrades(): Promise<void> {
+  try {
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Find all PENDING trades older than 24 hours
+    const oldPendingTrades = await prisma.investment.findMany({
+      where: {
+        status: "PENDING",
+        createdAt: {
+          lt: twentyFourHoursAgo, // Created more than 24 hours ago
+        },
+      },
+    });
+
+    if (oldPendingTrades.length === 0) {
+      return; // No old pending trades to cleanup
+    }
+
+    logger.info(
+      `[SCHEDULER] Found ${oldPendingTrades.length} old PENDING trades to cleanup`
+    );
+
+    // Delete the old pending trades
+    const result = await prisma.investment.deleteMany({
+      where: {
+        status: "PENDING",
+        createdAt: {
+          lt: twentyFourHoursAgo,
+        },
+      },
+    });
+
+    logger.info(
+      `[SCHEDULER] ✅ Deleted ${result.count} old PENDING trades (older than 24 hours)`
+    );
+  } catch (error) {
+    logger.error(`[SCHEDULER] Error in cleanupOldPendingTrades:`, error);
   }
 }
 

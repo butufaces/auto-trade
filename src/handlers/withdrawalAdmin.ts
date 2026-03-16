@@ -15,7 +15,7 @@ export async function handleAdminViewWithdrawals(ctx: SessionContext): Promise<v
   try {
     const withdrawals = await (prisma as any).withdrawalRequest.findMany({
       where: {
-        status: "PENDING",
+        status: { in: ["UNVERIFIED", "PENDING"] },
       },
       include: {
         user: true,

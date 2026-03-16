@@ -989,7 +989,7 @@ User has been notified of completion.`, {
       const userMessage = `✅ <b>Withdrawal Completed!</b>\n\n
 Amount: ${formatCurrency(withdrawal.amount)}\n
 Status: ✅ Payment Sent\n\n
-The funds have been transferred to your bank account. It may take 1-3 business days to appear depending on your bank.`;
+The funds have been transferred to your wallet. Please allow some time for the transaction to be confirmed on the blockchain.`;
       await ctx.api.sendMessage(withdrawal.user.telegramId.toString(), userMessage, {
         parse_mode: "HTML",
       });
@@ -998,7 +998,7 @@ The funds have been transferred to your bank account. It may take 1-3 business d
       await NotificationService.createNotification(
         withdrawal.userId,
         "✅ Withdrawal Completed",
-        `Your withdrawal of ${formatCurrency(withdrawal.amount)} has been completed and the funds have been sent to your bank account.`,
+        `Your withdrawal of ${formatCurrency(withdrawal.amount)} has been completed and the funds have been sent to your wallet.`,
         "WITHDRAWAL",
         undefined,
         withdrawalId
