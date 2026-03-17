@@ -4,6 +4,7 @@ import bot from "../index.js";
 import nowpaymentsService from "../services/cryptoPayment.js";
 import { config } from "../config/env.js";
 import TelegramNotificationService from "../services/telegramNotification.js";
+import ReferralService from "../services/referral.js";
 import { calculateMaturityDate } from "../lib/helpers.js";
 
 /**
@@ -126,6 +127,19 @@ export async function handlePaymentWebhook(
           paymentVerifiedAt: activationTime,
         },
       });
+
+      // Credit referral bonus if applicable
+      try {
+        logger.debug(`[WEBHOOK] Attempting to credit referral bonus for investment ${investmentId}`);
+        await ReferralService.creditReferralBonus(
+          investmentId,
+          investmentWithPackage.amount,
+          investment.userId
+        );
+      } catch (bonusError) {
+        logger.error(`[WEBHOOK] Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+        // Don't fail the payment if bonus credit fails
+      }
 
       // Notify user of payment confirmation
       await notifyPaymentConfirmed(investment.user.telegramId, investment, newMaturityDate);

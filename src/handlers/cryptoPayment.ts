@@ -1,6 +1,7 @@
 import logger from "../config/logger.js";
 import prisma from "../db/client.js";
 import nowpaymentsService from "../services/cryptoPayment.js";
+import ReferralService from "../services/referral.js";
 import { formatCurrency, calculateMaturityDate } from "../lib/helpers.js";
 import bot from "../index.js";
 import { config } from "../config/env.js";
@@ -1155,6 +1156,24 @@ function startPaymentStatusChecker(
           },
         });
 
+        // Credit referral bonus if applicable
+        try {
+          logger.debug(`[CRYPTO] Attempting to credit referral bonus for investment ${investmentId}`);
+          const investment = await prisma.investment.findUnique({
+            where: { id: investmentId },
+          });
+          if (investment) {
+            await ReferralService.creditReferralBonus(
+              investmentId,
+              investment.amount,
+              investment.userId
+            );
+          }
+        } catch (bonusError) {
+          logger.error(`[CRYPTO] Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+          // Don't fail the payment if bonus credit fails
+        }
+
         // Notify user
         try {
           await ctx.editMessageText(
@@ -1209,6 +1228,19 @@ export async function handlePaymentConfirmation(investmentId: string): Promise<v
         maturityDate: newMaturityDate,
       },
     });
+
+    // Credit referral bonus if applicable
+    try {
+      logger.debug(`[CRYPTO] Attempting to credit referral bonus in handlePaymentConfirmation for investment ${investmentId}`);
+      await ReferralService.creditReferralBonus(
+        investmentId,
+        investment.amount,
+        investment.userId
+      );
+    } catch (bonusError) {
+      logger.error(`[CRYPTO] Error crediting referral bonus in handlePaymentConfirmation for investment ${investmentId}:`, bonusError);
+      // Don't fail the payment if bonus credit fails
+    }
 
     await prisma.cryptoPayment.update({
       where: { investmentId },
