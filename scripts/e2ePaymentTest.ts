@@ -65,8 +65,8 @@ async function main() {
 
     // Save crypto payment (simulate handler save)
     const nowpaymentsId = String(payment.payment_id ?? payment.id ?? payment.token_id ?? '');
-    const amountCrypto = (payment.pay_amount ?? payment.amount ?? amountUsd).toString();
-    const payAddress = payment.pay_address ?? payment.address ?? null;
+    const amountCrypto = (payment.pay_amount ?? amountUsd).toString();
+    const payAddress = payment.pay_address ?? null;
     const checkoutUrl = payment.checkout_url ?? payment.invoice_url ?? null;
 
     const cryptoPayment = await prisma.cryptoPayment.upsert({

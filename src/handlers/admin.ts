@@ -128,13 +128,15 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
 
     // Credit referral bonus if applicable
     try {
-      logger.debug(`Attempting to credit referral bonus for investment ${investmentId} (user: ${investment.userId}, amount: ${investment.amount})`);
+      logger.info(`[ADMIN] 🎁 Attempting to credit referral bonus for investment ${investmentId} (amount: $${investment.amount})`);
       
       await ReferralService.creditReferralBonus(
         investmentId,
         investment.amount,
         investment.userId
       );
+
+      logger.info(`[ADMIN] ✅ Referral bonus processed successfully for investment ${investmentId}`);
 
       // Send notification to referrer about bonus (if bonus was credited)
       const referredUser = await prisma.user.findUnique({

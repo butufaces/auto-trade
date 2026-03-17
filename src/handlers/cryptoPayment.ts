@@ -1158,19 +1158,22 @@ function startPaymentStatusChecker(
 
         // Credit referral bonus if applicable
         try {
-          logger.debug(`[CRYPTO] Attempting to credit referral bonus for investment ${investmentId}`);
           const investment = await prisma.investment.findUnique({
             where: { id: investmentId },
           });
           if (investment) {
+            logger.info(`[CRYPTO] 🎁 Attempting to credit referral bonus for investment ${investmentId} (amount: $${investment.amount})`);
             await ReferralService.creditReferralBonus(
               investmentId,
               investment.amount,
               investment.userId
             );
+            logger.info(`[CRYPTO] ✅ Referral bonus processed successfully for investment ${investmentId}`);
+          } else {
+            logger.warn(`[CRYPTO] ⚠️  Investment ${investmentId} not found when trying to credit referral bonus`);
           }
         } catch (bonusError) {
-          logger.error(`[CRYPTO] Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+          logger.error(`[CRYPTO] ❌ Error crediting referral bonus for investment ${investmentId}:`, bonusError);
           // Don't fail the payment if bonus credit fails
         }
 
@@ -1231,14 +1234,15 @@ export async function handlePaymentConfirmation(investmentId: string): Promise<v
 
     // Credit referral bonus if applicable
     try {
-      logger.debug(`[CRYPTO] Attempting to credit referral bonus in handlePaymentConfirmation for investment ${investmentId}`);
+      logger.info(`[CRYPTO] 🎁 Attempting to credit referral bonus in handlePaymentConfirmation for investment ${investmentId} (amount: $${investment.amount})`);
       await ReferralService.creditReferralBonus(
         investmentId,
         investment.amount,
         investment.userId
       );
+      logger.info(`[CRYPTO] ✅ Referral bonus processed successfully for investment ${investmentId}`);
     } catch (bonusError) {
-      logger.error(`[CRYPTO] Error crediting referral bonus in handlePaymentConfirmation for investment ${investmentId}:`, bonusError);
+      logger.error(`[CRYPTO] ❌ Error crediting referral bonus in handlePaymentConfirmation for investment ${investmentId}:`, bonusError);
       // Don't fail the payment if bonus credit fails
     }
 

@@ -221,12 +221,16 @@ export async function handleConfirmRegistration(
 
     // If referral code was provided, link user to referrer and increment referrer's referral count
     if (referralCode) {
+      logger.info(`[REGISTRATION] ✅ Setting referral code for user ${user.id}: ${referralCode}`);
+      
       await prisma.user.update({
         where: { id: ctx.session.userId },
         data: {
           referredBy: referralCode,
         },
       });
+
+      logger.info(`[REGISTRATION] ✅ Referral code set in database for ${user.id}`);
 
       await prisma.user.update({
         where: { referralCode: referralCode },
@@ -238,8 +242,10 @@ export async function handleConfirmRegistration(
       });
 
       logger.info(
-        `✅ User ${user.id} registered with referral code ${referralCode}`
+        `[REGISTRATION] ✅ User ${user.id} registered with referral code ${referralCode} - referrer count incremented`
       );
+    } else {
+      logger.info(`[REGISTRATION] User ${user.id} registered without referral code`);
     }
 
     // Generate and set verification token with the email to verify

@@ -43,48 +43,58 @@ class ReferralService {
     try {
       // Skip if referral bonus is disabled
       if (!config.ENABLE_REFERRAL_BONUS) {
-        logger.info("Referral bonus disabled, skipping");
+        logger.info(`[REFERRAL] Bonus disabled, skipping for investment ${investmentId}`);
         return;
       }
+
+      logger.info(`[REFERRAL] Starting bonus credit process for investment ${investmentId}, user ${referredUserId}, amount $${investmentAmount}`);
 
       // Get referred user's referrer
       const referredUser = await prisma.user.findUnique({
         where: { id: referredUserId },
-        select: { referredBy: true, id: true },
+        select: { referredBy: true, id: true, firstName: true, lastName: true },
       });
 
-      if (!referredUser?.referredBy) {
-        logger.debug(`No referrer for user ${referredUserId} - user does not have a referral code assigned`);
+      if (!referredUser) {
+        logger.warn(`[REFERRAL] ❌ User not found: ${referredUserId}`);
         return;
       }
 
-      logger.debug(`Processing referral bonus for user ${referredUserId} with referrer code ${referredUser.referredBy}`);
+      if (!referredUser.referredBy) {
+        logger.warn(`[REFERRAL] ⚠️  User ${referredUserId} (${referredUser.firstName} ${referredUser.lastName}) has NO referrer set (referredBy=NULL)`);
+        logger.warn(`[REFERRAL] 📝 To fix: This user was not registered with a referral code`);
+        return;
+      }
+
+      logger.debug(`[REFERRAL] Processing referral bonus for user ${referredUserId} (${referredUser.firstName} ${referredUser.lastName}) with referrer code ${referredUser.referredBy}`);
 
       // Get referrer user by referral code
       const referrer = await prisma.user.findUnique({
         where: { referralCode: referredUser.referredBy },
-        select: { id: true, status: true },
+        select: { id: true, status: true, firstName: true, lastName: true },
       });
 
       if (!referrer) {
-        logger.warn(`❌ Referrer not found for code: ${referredUser.referredBy}`);
+        logger.warn(`[REFERRAL] ❌ Referrer not found for code: ${referredUser.referredBy}`);
         return;
       }
 
       if (referrer.status !== "ACTIVE") {
-        logger.warn(`❌ Referrer ${referrer.id} is not ACTIVE (status: ${referrer.status}) - cannot credit bonus for code: ${referredUser.referredBy}`);
+        logger.warn(`[REFERRAL] ❌ Referrer ${referrer.id} (${referrer.firstName} ${referrer.lastName}) is not ACTIVE (status: ${referrer.status}) - cannot credit bonus for code: ${referredUser.referredBy}`);
         return;
       }
 
       // Skip if referrer is the same as referred user (shouldn't happen but be safe)
       if (referrer.id === referredUserId) {
-        logger.warn("Referrer cannot be the same as referred user");
+        logger.warn(`[REFERRAL] ❌ Referrer cannot be the same as referred user`);
         return;
       }
 
       // Get bonus percentage
       const bonusPercentage = await this.getBonusPercentage();
       const bonusAmount = this.calculateBonus(investmentAmount, bonusPercentage);
+
+      logger.info(`[REFERRAL] ✅ Creating bonus: ${bonusPercentage}% of $${investmentAmount} = $${bonusAmount} for referrer ${referrer.id} (${referrer.firstName} ${referrer.lastName})`);
 
       // Create referral bonus record
       const referralBonus = await prisma.referralBonus.create({
@@ -99,8 +109,10 @@ class ReferralService {
         },
       });
 
+      logger.info(`[REFERRAL] 📝 ReferralBonus record created: ${referralBonus.id}`);
+
       // Update referrer's referral earnings
-      await prisma.user.update({
+      const updatedReferrer = await prisma.user.update({
         where: { id: referrer.id },
         data: {
           referralEarnings: {
@@ -110,10 +122,11 @@ class ReferralService {
             increment: bonusAmount,
           },
         },
+        select: { referralEarnings: true, totalEarned: true }
       });
 
       logger.info(
-        `✅ 💰 Referral bonus CREDITED: ${bonusPercentage}% of ${investmentAmount} = ${bonusAmount} to referrer ${referrer.id} (Investment: ${investmentId})`
+        `[REFERRAL] ✅ 💰 Referral bonus CREDITED: ${bonusPercentage}% of $${investmentAmount} = $${bonusAmount} to referrer ${referrer.id} (${referrer.firstName} ${referrer.lastName}). New earnings: $${updatedReferrer.referralEarnings}, New total earned: $${updatedReferrer.totalEarned}`
       );
     } catch (error) {
       logger.error("Error crediting referral bonus:", error);

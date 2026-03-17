@@ -130,14 +130,15 @@ export async function handlePaymentWebhook(
 
       // Credit referral bonus if applicable
       try {
-        logger.debug(`[WEBHOOK] Attempting to credit referral bonus for investment ${investmentId}`);
+        logger.info(`[WEBHOOK] 🎁 Attempting to credit referral bonus for investment ${investmentId} (amount: $${investmentWithPackage.amount})`);
         await ReferralService.creditReferralBonus(
           investmentId,
           investmentWithPackage.amount,
           investment.userId
         );
+        logger.info(`[WEBHOOK] ✅ Referral bonus processed successfully for investment ${investmentId}`);
       } catch (bonusError) {
-        logger.error(`[WEBHOOK] Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+        logger.error(`[WEBHOOK] ❌ Error crediting referral bonus for investment ${investmentId}:`, bonusError);
         // Don't fail the payment if bonus credit fails
       }
 
