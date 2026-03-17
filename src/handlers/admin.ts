@@ -128,13 +128,15 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
 
     // Credit referral bonus if applicable
     try {
+      logger.debug(`Attempting to credit referral bonus for investment ${investmentId} (user: ${investment.userId}, amount: ${investment.amount})`);
+      
       await ReferralService.creditReferralBonus(
         investmentId,
         investment.amount,
         investment.userId
       );
 
-      // Send notification to referrer about bonus
+      // Send notification to referrer about bonus (if bonus was credited)
       const referredUser = await prisma.user.findUnique({
         where: { id: investment.userId },
         select: { referredBy: true },
@@ -150,6 +152,8 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
           const bonusPercentage = await ReferralService.getBonusPercentage();
           const bonusAmount = (investment.amount * bonusPercentage) / 100;
 
+          logger.debug(`Sending referral bonus notification to referrer ${referrer.id} for amount ${bonusAmount}`);
+
           await NotificationService.createNotification(
             referrer.id,
             "🎁 Referral Bonus Earned!",
@@ -160,8 +164,9 @@ export async function handleProcessApproval(ctx: SessionContext): Promise<void> 
         }
       }
     } catch (error) {
-      logger.error("Error crediting referral bonus:", error);
-      // Don't fail the approval if bonus credit fails
+      logger.error(`❌ Error crediting referral bonus for investment ${investmentId}:`, error);
+      // Log but don't fail the approval if bonus credit fails - approval should still go through
+      logger.warn(`Investment ${investmentId} approved but referral bonus credit encountered an error. Further investigation may be needed.`);
     }
 
     logger.info(`✅ Trade approved successfully: ${investmentId}`);

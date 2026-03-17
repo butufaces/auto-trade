@@ -54,9 +54,11 @@ class ReferralService {
       });
 
       if (!referredUser?.referredBy) {
-        logger.info(`No referrer for user ${referredUserId}`);
+        logger.debug(`No referrer for user ${referredUserId} - user does not have a referral code assigned`);
         return;
       }
+
+      logger.debug(`Processing referral bonus for user ${referredUserId} with referrer code ${referredUser.referredBy}`);
 
       // Get referrer user by referral code
       const referrer = await prisma.user.findUnique({
@@ -64,8 +66,13 @@ class ReferralService {
         select: { id: true, status: true },
       });
 
-      if (!referrer || referrer.status !== "ACTIVE") {
-        logger.warn(`Referrer not found or inactive for code: ${referredUser.referredBy}`);
+      if (!referrer) {
+        logger.warn(`❌ Referrer not found for code: ${referredUser.referredBy}`);
+        return;
+      }
+
+      if (referrer.status !== "ACTIVE") {
+        logger.warn(`❌ Referrer ${referrer.id} is not ACTIVE (status: ${referrer.status}) - cannot credit bonus for code: ${referredUser.referredBy}`);
         return;
       }
 
@@ -106,7 +113,7 @@ class ReferralService {
       });
 
       logger.info(
-        `💰 Referral bonus credited: ${bonusPercentage}% of ${investmentAmount} = ${bonusAmount} to referrer ${referrer.id}`
+        `✅ 💰 Referral bonus CREDITED: ${bonusPercentage}% of ${investmentAmount} = ${bonusAmount} to referrer ${referrer.id} (Investment: ${investmentId})`
       );
     } catch (error) {
       logger.error("Error crediting referral bonus:", error);

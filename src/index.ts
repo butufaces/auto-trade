@@ -627,6 +627,7 @@ bot.on("callback_query", async (ctx) => {
     // Resend verification email
     if (data === "resend_verification") {
       logNavigation("Profile", "Resend Verification", ctx.session.userId);
+      await ctx.answerCallbackQuery();
       return handleResendVerificationEmail(ctx);
     }
 
