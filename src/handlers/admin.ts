@@ -1112,7 +1112,9 @@ export async function handleReferralSettings(ctx: SessionContext): Promise<void>
         inline_keyboard: [
           [{ text: "✏️ Edit Percentage", callback_data: "edit_referral_percentage" }],
           [{ text: "💵 Edit Min Threshold", callback_data: "edit_minimum_referral_withdrawal" }],
-          [{ text: "📊 View Analytics", callback_data: "view_referral_analytics" }],
+          [{ text: "📊 Referral Stats", callback_data: "referral_stats" }],
+          [{ text: "⚠️ Failed Bonuses", callback_data: "view_failed_bonuses" }],
+          [{ text: "🔗 Link Referrer", callback_data: "link_referrer_manual" }],
           [{ text: "🏠 Back to Admin", callback_data: "back_to_admin_menu" }]
         ]
       }

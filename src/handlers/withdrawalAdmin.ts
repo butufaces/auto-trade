@@ -163,15 +163,17 @@ export async function handleAdminMarkWithdrawalPaid(
     }
 
     // Determine if this is a full or partial withdrawal
-    const investment = withdrawal.investment || await (prisma as any).investment.findUnique({
+    // For referral withdrawals, investmentId is null, so skip investment lookup
+    const investment = withdrawal.investment || (withdrawal.investmentId ? await (prisma as any).investment.findUnique({
       where: { id: withdrawal.investmentId },
-    });
+    }) : null);
 
     const isFullWithdrawal = investment && withdrawal.amount >= investment.availableWithdrawable;
     const newInvestmentStatus = isFullWithdrawal ? "COMPLETED" : "MATURED";
 
     // Update investment: deduct amount and update status based on withdrawal type
-    if (withdrawal.investmentId && withdrawal.status !== "COMPLETED") {
+    // Only update investment if this withdrawal is tied to a specific investment (not referral bonus)
+    if (withdrawal.investmentId && investment && withdrawal.status !== "COMPLETED") {
       await (prisma as any).investment.update({
         where: { id: withdrawal.investmentId },
         data: {

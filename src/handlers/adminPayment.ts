@@ -1,6 +1,7 @@
 import prisma from "../db/client.js";
 import logger from "../config/logger.js";
 import PaymentAccountService from "../services/paymentAccount.js";
+import ReferralService from "../services/referral.js";
 import { NotificationService } from "../services/notification.js";
 import TelegramNotificationService from "../services/telegramNotification.js";
 import { InlineKeyboard } from "grammy";
@@ -635,6 +636,20 @@ export async function handleApprovePaymentProof(ctx: any): Promise<void> {
     }
 
     const displayName = `${investment.user.firstName}${investment.user.lastName ? ` ${investment.user.lastName}` : ""}`;
+
+    // Credit referral bonus if applicable
+    try {
+      logger.info(`[ADMIN-PAYMENT] 🎁 Attempting to credit referral bonus for investment ${investmentId} (amount: $${investment.amount})`);
+      await ReferralService.creditReferralBonus(
+        investmentId,
+        investment.amount,
+        investment.userId
+      );
+      logger.info(`[ADMIN-PAYMENT] ✅ Referral bonus processed successfully for investment ${investmentId}`);
+    } catch (bonusError) {
+      logger.error(`[ADMIN-PAYMENT] ❌ Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+      // Don't fail the approval if bonus credit fails - the investment is already active
+    }
 
     await ctx.reply(
       `✅ <b>Payment Approved!</b>\n\n` +

@@ -2,10 +2,12 @@ import logger from "../config/logger.js";
 import prisma from "../db/client.js";
 import nowpaymentsService from "../services/cryptoPayment.js";
 import ReferralService from "../services/referral.js";
+import TelegramNotificationService from "../services/telegramNotification.js";
 import { formatCurrency, calculateMaturityDate } from "../lib/helpers.js";
 import bot from "../index.js";
 import { config } from "../config/env.js";
 import CurrencyService from "../services/currency.js";
+import { mainMenuKeyboard } from "../utils/keyboard.js";
 import axios from "axios";
 import puppeteer from "puppeteer";
 
@@ -244,7 +246,9 @@ export async function handleSelectCryptocurrency(ctx: SessionContext): Promise<v
     const match = data.match(/select_crypto_(.+?)_([A-Z]+)$/);
     
     if (!match || match.length < 3) {
-      await ctx.reply("Invalid cryptocurrency selection. Please try again.");
+      await ctx.reply("Invalid cryptocurrency selection. Please try again.", {
+        reply_markup: mainMenuKeyboard,
+      });
       await ctx.answerCallbackQuery();
       return;
     }
@@ -263,7 +267,9 @@ export async function handleSelectCryptocurrency(ctx: SessionContext): Promise<v
     });
 
     if (!investment) {
-      await ctx.reply("Investment not found.");
+      await ctx.reply("Investment not found.", {
+        reply_markup: mainMenuKeyboard,
+      });
       await ctx.answerCallbackQuery();
       return;
     }
@@ -279,7 +285,9 @@ export async function handleSelectCryptocurrency(ctx: SessionContext): Promise<v
     await showBlockchainSelection(ctx, investmentId, selectedCrypto);
   } catch (error) {
     logger.error("Error in handleSelectCryptocurrency:", error);
-    await ctx.reply("Error processing cryptocurrency selection. Please try again.");
+    await ctx.reply("Error processing cryptocurrency selection. Please try again.", {
+      reply_markup: mainMenuKeyboard,
+    });
     await ctx.answerCallbackQuery();
   }
 }
@@ -340,7 +348,9 @@ async function showBlockchainSelection(
     });
   } catch (error) {
     logger.error("Error showing blockchain selection:", error);
-    await ctx.reply("Error selecting blockchain. Please try again.");
+    await ctx.reply("Error selecting blockchain. Please try again.", {
+      reply_markup: mainMenuKeyboard,
+    });
   }
 }
 
@@ -459,7 +469,9 @@ export async function handleSelectBlockchain(ctx: SessionContext): Promise<void>
       });
 
       if (!investment) {
-        await ctx.reply("Investment not found.");
+        await ctx.reply("Investment not found.", {
+          reply_markup: mainMenuKeyboard,
+        });
         await ctx.answerCallbackQuery();
         return;
       }
@@ -479,7 +491,9 @@ export async function handleSelectBlockchain(ctx: SessionContext): Promise<void>
     }
   } catch (error) {
     logger.error("Error in handleSelectBlockchain:", error);
-    await ctx.reply("Error processing blockchain selection. Please try again.");
+    await ctx.reply("Error processing blockchain selection. Please try again.", {
+      reply_markup: mainMenuKeyboard,
+    });
     await ctx.answerCallbackQuery();
   }
 }
@@ -789,6 +803,23 @@ async function createCryptoPayment(
           walletAddress
         );
         logger.info(`[CRYPTO] Displayed complete payment widget with final URL`);
+
+        // Notify admin of new trade
+        const { getUserDisplayName } = await import("../lib/helpers.js");
+        try {
+          await TelegramNotificationService.notifyAdminNewTrade(
+            investmentId,
+            investment.userId,
+            getUserDisplayName(investment.user),
+            investment.amount,
+            investment.package?.name || "Unknown Package",
+            cryptocurrency,
+            blockchain || "mainnet",
+            investment.user?.telegramId?.toString()
+          );
+        } catch (notifyErr) {
+          logger.warn("Failed to send admin trade notification:", notifyErr);
+        }
       }
   } catch (error: any) {
     logger.error(`[CRYPTO] Failed to create payment:`, {

@@ -294,6 +294,204 @@ export class TelegramNotificationService {
       );
     }
   }
+
+  /**
+   * Notify admin when user opens new trade
+   */
+  static async notifyAdminNewTrade(
+    investmentId: string,
+    userId: string,
+    userName: string,
+    amount: number,
+    packageName: string,
+    cryptocurrency: string,
+    blockchain: string,
+    userTelegramId?: string
+  ): Promise<void> {
+    try {
+      if (!config.ADMIN_CHAT_ID) {
+        logger.warn("ADMIN_CHAT_ID not configured. Skipping admin trade notification.");
+        return;
+      }
+
+      let message = `🚀 <b>New Trade Opened</b>\n\n`;
+      message += `<b>User Details:</b>\n`;
+      message += `👤 Name: ${userName}\n`;
+      if (userTelegramId) {
+        message += `📱 Telegram ID: <code>${userTelegramId}</code>\n`;
+      }
+      message += `\n<b>📊 Trade Details:</b>\n`;
+      message += `💰 Amount: ${formatCurrency(amount)}\n`;
+      message += `📦 Package: ${packageName}\n`;
+      message += `🪙 Cryptocurrency: ${cryptocurrency.toUpperCase()}\n`;
+      message += `⛓️ Blockchain: ${blockchain}\n`;
+      message += `📋 Investment ID: <code>${investmentId}</code>\n`;
+      message += `\n<b>⏳ Status:</b>\n`;
+      message += `Awaiting payment confirmation`;
+
+      await bot.api.sendMessage(config.ADMIN_CHAT_ID.toString(), message, {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💼 View Trade", callback_data: `admin_view_investment_${investmentId}` }],
+            [{ text: "🏠 Back", callback_data: "back_to_menu" }]
+          ]
+        }
+      });
+
+      logger.info(
+        `[TELEGRAM] Admin notified of new trade for investment ${investmentId}`
+      );
+    } catch (error: any) {
+      logger.error(
+        `[TELEGRAM] Failed to send admin new trade notification:`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Notify referrer that they got a new referral
+   */
+  static async notifyReferrerNewReferral(
+    referrerName: string,
+    referrerTelegramId: string | number,
+    referredUserName: string,
+    referralCount: number
+  ): Promise<void> {
+    try {
+      let message = `🎁 <b>New Referral Registered!</b>\n\n`;
+      message += `Great news! <b>${referredUserName}</b> just signed up using your referral code.\n\n`;
+      message += `<b>📊 Your Referral Stats:</b>\n`;
+      message += `👥 Total Referrals: <b>${referralCount}</b>\n`;
+      message += `\n💡 <b>Tip:</b> You earn 10% commission when your referrals make deposits!\n`;
+      message += `\n📈 Share your referral code to earn more bonuses.`;
+
+      await bot.api.sendMessage(referrerTelegramId.toString(), message, {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🎁 My Referrals", callback_data: "view_my_referrals" }],
+            [{ text: "📤 Share Code", callback_data: "share_referral_code" }]
+          ]
+        }
+      });
+
+      logger.info(
+        `[TELEGRAM] Referrer ${referrerTelegramId} notified of new referral ${referredUserName}`
+      );
+    } catch (error: any) {
+      logger.error(
+        `[TELEGRAM] Failed to send referrer notification:`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Broadcast payout proof notification to all bot visitors
+   */
+  static async broadcastPayoutProof(
+    walletAddress: string,
+    blockchain: string,
+    amount?: string,
+    transactionLink?: string
+  ): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+  }> {
+    const BotVisitorService = (await import("./botVisitor.js")).default;
+    
+    try {
+      // Get all visitor chat IDs
+      const chatIds = await BotVisitorService.getAllVisitorChatIds();
+
+      if (chatIds.length === 0) {
+        logger.info("[TELEGRAM] No visitors to broadcast payout proof to");
+        return { total: 0, successful: 0, failed: 0 };
+      }
+
+      logger.info(
+        `[TELEGRAM] Broadcasting payout proof to ${chatIds.length} visitors`
+      );
+
+      let successful = 0;
+      let failed = 0;
+
+      // Build message
+      const displayWallet = `${walletAddress.substring(0, 10)}...${walletAddress.substring(
+        walletAddress.length - 8
+      )}`;
+
+      const message = `💸 <b>New Payout Proof!</b>
+
+✅ <b>Withdrawal Confirmed</b>
+
+🏦 Blockchain: <code>${blockchain}</code>
+💰 Amount: ${amount ? `<b>$${amount}</b>` : "Withdrawn"}
+👛 Wallet: <code>${displayWallet}</code>
+
+This is proof that we're processing real withdrawals to our users! 🚀
+
+View all proofs on our Payout Proofs page.`;
+
+      // Send to each visitor
+      for (const chatId of chatIds) {
+        try {
+          let keyboard: any = undefined;
+          if (transactionLink) {
+            keyboard = {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🔗 View Transaction",
+                    url: transactionLink,
+                  },
+                ],
+                [
+                  {
+                    text: "📊 View All Proofs",
+                    callback_data: "view_payout_proofs",
+                  },
+                ],
+              ],
+            };
+          } else {
+            keyboard = {
+              inline_keyboard: [
+                [
+                  {
+                    text: "📊 View All Proofs",
+                    callback_data: "view_payout_proofs",
+                  },
+                ],
+              ],
+            };
+          }
+
+          await bot.api.sendMessage(chatId, message, {
+            parse_mode: "HTML",
+            reply_markup: keyboard,
+          });
+
+          successful++;
+        } catch (error: any) {
+          logger.warn(`[TELEGRAM] Failed to send to chat ${chatId}:`, error.message);
+          failed++;
+        }
+      }
+
+      logger.info(
+        `[TELEGRAM] Payout proof broadcast complete: ${successful}/${chatIds.length} successful, ${failed} failed`
+      );
+
+      return { total: chatIds.length, successful, failed };
+    } catch (error: any) {
+      logger.error("[TELEGRAM] Failed to broadcast payout proof:", error);
+      throw error;
+    }
+  }
 }
 
 export default TelegramNotificationService;

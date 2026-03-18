@@ -141,6 +141,27 @@ import {
 } from "./handlers/admin-investments.js";
 
 import {
+  handlePayoutProofsMenu,
+  handleStartAddPayoutProof,
+  handlePayoutProofWalletInput,
+  handlePayoutProofBlockchainSelect,
+  handlePayoutProofBlockchainCustomInput,
+  handlePayoutProofTransactionLinkInput,
+  handlePayoutProofAmountInput,
+  handlePayoutProofDateInput,
+  handlePayoutProofDescriptionInput,
+  handlePublishPayoutProof,
+  handleAdminViewAllProofs,
+  handleDeletePayoutProof,
+  handleConfirmDeletePayoutProof,
+} from "./handlers/admin-payouts.js";
+
+import {
+  handleViewPayoutProofs,
+  handleViewProofDetails,
+} from "./handlers/payoutProofs.js";
+
+import {
   handleManagePackages,
   handleAddPackageStart,
   handleEditPackageStart,
@@ -232,6 +253,15 @@ import {
   handleDeleteHelpArticle,
   handleToggleHelpArticleStatus,
 } from "./handlers/admin-help.js";
+
+import {
+  handleViewFailedBonuses,
+  handleLinkReferrerManual,
+  handleLinkReferrerInput,
+  handleConfirmLinkReferrer,
+  handleCancelLinkReferrer,
+  handleReferralStats,
+} from "./handlers/admin-referral.js";
 
 import {
   handleStartRegistration,
@@ -434,6 +464,15 @@ interface SessionData {
     articleId: string;
     field: "title" | "content" | "icon" | "category";
   };
+  // Referral management
+  linkReferrerStep?: string;
+  linkReferrerUser?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    telegramId: string | number;
+  };
 }
 
 // Create bot
@@ -580,6 +619,16 @@ bot.hears(
   "🔌 Close Admin Panel",
   (ctx) => ctx.reply("Admin panel closed", { reply_markup: mainMenuKeyboard })
 );
+
+// Payout Proofs button handler - matches emoji variations due to encoding
+bot.hears(/Payout Proofs/, async (ctx: any) => {
+  logger.info(`[PAYOUTS] Payout Proofs button clicked - user isAdmin: ${ctx.session.isAdmin}`);
+  if (ctx.session.isAdmin) {
+    return handlePayoutProofsMenu(ctx);
+  } else {
+    return handleViewPayoutProofs(ctx);
+  }
+});
 
 // ==================== CALLBACK HANDLERS ====================
 
@@ -1962,6 +2011,12 @@ bot.on("callback_query", async (ctx) => {
       return handleWithdrawReferralBonus(ctx);
     }
 
+    if (data.startsWith("withdraw_referral_select_wallet_")) {
+      const walletId = data.replace("withdraw_referral_select_wallet_", "").trim();
+      const { handleConfirmWalletForReferralWithdrawal } = await import("./handlers/user.js");
+      return handleConfirmWalletForReferralWithdrawal(ctx, walletId);
+    }
+
     if (data === "share_referral_code") {
       const user = await prisma.user.findUnique({
         where: { id: ctx.session.userId },
@@ -2017,6 +2072,34 @@ When they use your code during registration, you'll earn a bonus from their inve
       return handleViewReferralAnalytics(ctx);
     }
 
+    if (data === "referral_stats") {
+      logPageView(`Referral Stats`, ctx.session.userId);
+      return handleReferralStats(ctx);
+    }
+
+    if (data === "view_failed_bonuses") {
+      logPageView(`Failed Bonuses`, ctx.session.userId);
+      return handleViewFailedBonuses(ctx);
+    }
+
+    if (data === "link_referrer_manual") {
+      logPageView(`Link Referrer Manual`, ctx.session.userId);
+      return handleLinkReferrerManual(ctx);
+    }
+
+    if (data === "cancel_link") {
+      logNavigation("Link Referrer", "Referral Settings", ctx.session.userId);
+      return handleCancelLinkReferrer(ctx);
+    }
+
+    if (data.startsWith("confirm_link_")) {
+      const parts = data.replace("confirm_link_", "").split("_");
+      const userId = parts[0];
+      const referrerId = parts.slice(1).join("_");
+      logPageView(`Confirm Link Referrer`, ctx.session.userId);
+      return handleConfirmLinkReferrer(ctx, userId, referrerId);
+    }
+
     if (data === "back_to_admin_menu") {
       logNavigation("Referral Settings", "Admin Panel", ctx.session.userId);
       return handleAdminPanel(ctx);
@@ -2065,12 +2148,115 @@ When they use your code during registration, you'll earn a bonus from their inve
       return handleRemoveWelcomeMedia(ctx);
     }
 
+    // ==================== PAYOUT PROOFS ====================
+
+    // Admin payout proofs menu
+    if (data === "admin_payout_proofs") {
+      return handlePayoutProofsMenu(ctx);
+    }
+
+    if (data === "admin_add_payout_proof") {
+      return handleStartAddPayoutProof(ctx);
+    }
+
+    if (data.startsWith("proof_blockchain_")) {
+      const blockchain = data.replace("proof_blockchain_", "");
+      return handlePayoutProofBlockchainSelect(ctx, blockchain);
+    }
+
+    if (data === "confirm_publish_payout_proof") {
+      return handlePublishPayoutProof(ctx);
+    }
+
+    if (data.startsWith("admin_view_all_proofs_page_")) {
+      const page = parseInt(data.replace("admin_view_all_proofs_page_", "") || "1");
+      return handleAdminViewAllProofs(ctx, page);
+    }
+
+    if (data.startsWith("admin_delete_proof_")) {
+      const proofId = data.replace("admin_delete_proof_", "");
+      return handleDeletePayoutProof(ctx, proofId);
+    }
+
+    if (data.startsWith("confirm_delete_proof_")) {
+      const proofId = data.replace("confirm_delete_proof_", "");
+      return handleConfirmDeletePayoutProof(ctx, proofId);
+    }
+
+    // User viewing payout proofs
+    if (data === "view_payout_proofs") {
+      return handleViewPayoutProofs(ctx);
+    }
+
+    if (data.startsWith("view_payouts_page_")) {
+      const page = parseInt(data.replace("view_payouts_page_", "") || "1");
+      return handleViewPayoutProofs(ctx, page);
+    }
+
+    if (data.startsWith("view_payout_proof_")) {
+      const proofId = data.replace("view_payout_proof_", "");
+      return handleViewProofDetails(ctx, proofId);
+    }
+
+    if (data === "noop") {
+      // No-op button (pagination indicator)
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
     logButtonResponse(data, true, ctx.session.userId);
     await ctx.answerCallbackQuery();
   } catch (error) {
     logError(`Callback [${data}]`, error as Error, ctx.session.userId);
     await ctx.reply("❌ An error occurred");
   }
+});
+
+// ==================== TEXT INPUT HANDLERS FOR PAYOUT PROOFS ====================
+
+bot.on("message:text", async (ctx, next) => {
+  const text = ctx.message?.text || "";
+  const userId = ctx.session?.userId;
+
+  // Handle payout proof input states (highest priority)
+  if ((ctx.session as any).awaitingInput === "payout_proof_wallet") {
+    return handlePayoutProofWalletInput(ctx);
+  }
+
+  if ((ctx.session as any).awaitingInput === "payout_proof_blockchain_custom") {
+    return handlePayoutProofBlockchainCustomInput(ctx);
+  }
+
+  if ((ctx.session as any).awaitingInput === "payout_proof_transaction_link") {
+    return handlePayoutProofTransactionLinkInput(ctx);
+  }
+
+  if ((ctx.session as any).awaitingInput === "payout_proof_amount") {
+    return handlePayoutProofAmountInput(ctx);
+  }
+
+  if ((ctx.session as any).awaitingInput === "payout_proof_date") {
+    return handlePayoutProofDateInput(ctx);
+  }
+
+  if ((ctx.session as any).awaitingInput === "payout_proof_description") {
+    return handlePayoutProofDescriptionInput(ctx);
+  }
+
+  // Handle button text messages for payout proofs (check multiple variations due to emoji encoding)
+  if (text.includes("Payout Proofs") || text.includes("payout") || text === "💸 Payout Proofs") {
+    logger.info(`[PAYOUTS] Button clicked with text: "${text}"`);
+    if (ctx.session.isAdmin) {
+      logger.info(`[ADMIN] 💸 Payout Proofs button clicked`);
+      return handlePayoutProofsMenu(ctx);
+    } else {
+      logger.info(`[USER] 💸 Payout Proofs button clicked`);
+      return handleViewPayoutProofs(ctx);
+    }
+  }
+
+  // Continue with next handler if not a payout proof related message
+  await next();
 });
 
 // ==================== WELCOME MEDIA HANDLERS ====================
@@ -2152,6 +2338,7 @@ bot.on("message", async (ctx) => {
       session.editingReferralThreshold ||
       session.helpArticleCreation ||
       session.editingHelpArticle ||
+      session.linkReferrerStep ||
       session.pendingWallet;
 
     // If this is not a workflow message, don't handle it here
@@ -2280,6 +2467,11 @@ bot.on("message", async (ctx) => {
     // Handle platform settings input (admin)
     if ((session as any).settingsEditingField) {
       return handleProcessSettingsInput(ctx, text.trim());
+    }
+
+    // Handle referrer linking input (admin)
+    if (session.linkReferrerStep) {
+      return handleLinkReferrerInput(ctx, text.trim());
     }
 
     // ==================== EXISTING HANDLERS ====================

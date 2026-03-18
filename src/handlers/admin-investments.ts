@@ -2,6 +2,7 @@ import { Context } from "grammy";
 import InvestmentService from "../services/investment.js";
 import UserService from "../services/user.js";
 import PackageService from "../services/package.js";
+import ReferralService from "../services/referral.js";
 import logger from "../config/logger.js";
 import {
   formatCurrency,
@@ -462,6 +463,22 @@ export async function handleConfirmDepositManually(ctx: SessionContext, investme
     });
 
     logger.info(`✅ [MANUAL] Admin confirmed deposit manually for investment ${investmentId}`);
+
+    // Credit referral bonus if applicable
+    try {
+      logger.info(`[ADMIN-INVESTMENTS] 🎁 Attempting to credit referral bonus for investment ${investmentId} (amount: $${updatedInvestment.amount})`);
+      
+      await ReferralService.creditReferralBonus(
+        investmentId,
+        updatedInvestment.amount,
+        updatedInvestment.userId
+      );
+
+      logger.info(`[ADMIN-INVESTMENTS] ✅ Referral bonus processed successfully for investment ${investmentId}`);
+    } catch (bonusError) {
+      logger.error(`[ADMIN-INVESTMENTS] ❌ Error crediting referral bonus for investment ${investmentId}:`, bonusError);
+      // Don't fail the confirmation if bonus credit fails - the investment is already active
+    }
 
     // Notify the user about payment confirmation
     try {

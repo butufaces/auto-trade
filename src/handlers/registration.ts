@@ -2,6 +2,7 @@ import { Context, InputFile } from "grammy";
 import UserService from "../services/user.js";
 import EmailService from "../services/email.js";
 import ReferralService from "../services/referral.js";
+import BotVisitorService from "../services/botVisitor.js";
 import prisma from "../db/client.js";
 import logger from "../config/logger.js";
 import {
@@ -156,9 +157,12 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
         }
 
         referralCode = input;
+        logger.info(`[REGISTRATION] ✅ Referral code validated: ${referralCode}`);
         await ctx.reply(`✅ Referral code accepted!`, {
           reply_markup: { remove_keyboard: true },
         });
+      } else {
+        logger.info(`[REGISTRATION] User skipped referral code`);
       }
 
       ctx.session.registrationData.referralCode = referralCode;
@@ -219,33 +223,94 @@ export async function handleConfirmRegistration(
       phoneNumber,
     });
 
+    // Mark this visitor as registered
+    try {
+      await BotVisitorService.markAsRegistered(
+        BigInt(ctx.from!.id),
+        user.id
+      );
+    } catch (error) {
+      logger.error("Failed to mark visitor as registered:", error);
+      // Don't let this error block registration
+    }
+
     // If referral code was provided, link user to referrer and increment referrer's referral count
     if (referralCode) {
       logger.info(`[REGISTRATION] ✅ Setting referral code for user ${user.id}: ${referralCode}`);
       
-      await prisma.user.update({
-        where: { id: ctx.session.userId },
-        data: {
-          referredBy: referralCode,
-        },
-      });
-
-      logger.info(`[REGISTRATION] ✅ Referral code set in database for ${user.id}`);
-
-      await prisma.user.update({
-        where: { referralCode: referralCode },
-        data: {
-          referralCount: {
-            increment: 1,
+      try {
+        // Update user with referral link
+        const updatedUser = await prisma.user.update({
+          where: { id: ctx.session.userId },
+          data: {
+            referredBy: referralCode,
           },
-        },
-      });
+          select: {
+            id: true,
+            referredBy: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        });
 
-      logger.info(
-        `[REGISTRATION] ✅ User ${user.id} registered with referral code ${referralCode} - referrer count incremented`
-      );
+        // CRITICAL VALIDATION: Ensure referredBy was actually saved
+        if (!updatedUser.referredBy || updatedUser.referredBy !== referralCode) {
+          logger.error(`[REGISTRATION] ❌ CRITICAL: Referral code NOT saved to database!`);
+          logger.error(`[REGISTRATION]    Expected referredBy: ${referralCode}`);
+          logger.error(`[REGISTRATION]    Actual saved: ${updatedUser.referredBy}`);
+          logger.error(`[REGISTRATION]    User ID: ${updatedUser.id}`);
+          logger.error(`[REGISTRATION]    User: ${updatedUser.firstName} ${updatedUser.lastName} (${updatedUser.email})`);
+          throw new Error(`Failed to save referral code to user ${user.id}`);
+        }
+
+        logger.info(`[REGISTRATION] ✅ Referral code set in database for ${user.id}`);
+
+        // Increment referrer's referral count
+        const referrer = await prisma.user.update({
+          where: { referralCode: referralCode },
+          data: {
+            referralCount: {
+              increment: 1,
+            },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            referralCode: true,
+            referralCount: true,
+            telegramId: true
+          }
+        });
+
+        logger.info(
+          `[REGISTRATION] ✅ User ${updatedUser.firstName} ${updatedUser.lastName} (${updatedUser.email}) registered with referral code ${referralCode}`
+        );
+        logger.info(
+          `[REGISTRATION]    Referrer: ${referrer.firstName} ${referrer.lastName} (${referrer.referralCode}) - referral count now: ${referrer.referralCount}`
+        );
+
+        // Notify referrer of new referral
+        if (referrer.telegramId) {
+          try {
+            const TelegramNotificationService = (await import("../services/telegramNotification.js")).default;
+            await TelegramNotificationService.notifyReferrerNewReferral(
+              `${referrer.firstName} ${referrer.lastName}`,
+              referrer.telegramId.toString(),
+              `${updatedUser.firstName} ${updatedUser.lastName}`,
+              referrer.referralCount
+            );
+          } catch (notifyErr) {
+            logger.warn(`[REGISTRATION] Failed to notify referrer of new referral:`, notifyErr);
+          }
+        }
+      } catch (referralError) {
+        logger.error(`[REGISTRATION] ❌ Error processing referral code ${referralCode}:`, referralError);
+        throw referralError;
+      }
     } else {
-      logger.info(`[REGISTRATION] User ${user.id} registered without referral code`);
+      logger.info(`[REGISTRATION] User ${user.id} (${user.firstName} ${user.lastName}) registered without referral code`);
     }
 
     // Generate and set verification token with the email to verify

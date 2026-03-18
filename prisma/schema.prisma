@@ -60,47 +60,47 @@ enum TargetType {
 // ==================== MODELS ====================
 
 model User {
-  id                    String           @id @default(cuid())
-  telegramId            BigInt           @unique
-  username              String?          @unique
-  firstName             String?
-  lastName              String?
-  phoneNumber           String?
-  email                 String?
-  emailVerified         Boolean          @default(false)
-  emailVerificationToken String?
+  id                           String     @id @default(cuid())
+  telegramId                   BigInt     @unique
+  username                     String?    @unique
+  firstName                    String?
+  lastName                     String?
+  phoneNumber                  String?
+  email                        String?
+  emailVerified                Boolean    @default(false)
+  emailVerificationToken       String?
   emailVerificationTokenExpiry DateTime?
-  lastResendAttempt     DateTime?        // Track when user last requested verification email resend
-  resendAttempts        Int              @default(0)        // Track resend attempts for rate limiting
-  status                UserStatus       @default(ACTIVE)
-  isAdmin               Boolean          @default(false)
-  kycVerified           Boolean          @default(false)
-  kycDocument           String?
-  bankDetails           String? // Encrypted
-  totalInvested         Float            @default(0)
-  totalEarned           Float            @default(0)
-  totalWithdrawn        Float            @default(0)
-  referralCode          String?          @unique
-  referredBy            String?
-  referralCount         Int              @default(0)
-  referralEarnings      Float            @default(0)       // Total earned from referrals
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  lastActiveAt          DateTime?
+  lastResendAttempt            DateTime? // Track when user last requested verification email resend
+  resendAttempts               Int        @default(0) // Track resend attempts for rate limiting
+  status                       UserStatus @default(ACTIVE)
+  isAdmin                      Boolean    @default(false)
+  kycVerified                  Boolean    @default(false)
+  kycDocument                  String?
+  bankDetails                  String? // Encrypted
+  totalInvested                Float      @default(0)
+  totalEarned                  Float      @default(0)
+  totalWithdrawn               Float      @default(0)
+  referralCode                 String?    @unique
+  referredBy                   String?
+  referralCount                Int        @default(0)
+  referralEarnings             Float      @default(0) // Total earned from referrals
+  createdAt                    DateTime   @default(now())
+  updatedAt                    DateTime   @updatedAt
+  lastActiveAt                 DateTime?
 
   // Relations
-  investments           Investment[]
-  reviews               Review[]
-  adminLogs             AdminLog[]
-  withdrawalRequests    WithdrawalRequest[]
-  notifications         Notification[]
-  sentAnnouncements     Announcement[]    @relation("sentBy")
-  supportTickets        SupportTicket[]
-  supportMessages       SupportMessage[]
-  referralBonuses       ReferralBonus[]   @relation("referrer")
-  referralBonusesAsReferred ReferralBonus[]   @relation("referredUser")
-  cryptoPayments        CryptoPayment[]
-  wallets               Wallet[]
+  investments               Investment[]
+  reviews                   Review[]
+  adminLogs                 AdminLog[]
+  withdrawalRequests        WithdrawalRequest[]
+  notifications             Notification[]
+  sentAnnouncements         Announcement[]      @relation("sentBy")
+  supportTickets            SupportTicket[]
+  supportMessages           SupportMessage[]
+  referralBonuses           ReferralBonus[]     @relation("referrer")
+  referralBonusesAsReferred ReferralBonus[]     @relation("referredUser")
+  cryptoPayments            CryptoPayment[]
+  wallets                   Wallet[]
 
   @@index([telegramId])
   @@index([username])
@@ -109,70 +109,70 @@ model User {
 }
 
 model Package {
-  id                    String           @id @default(cuid())
-  name                  String           @unique
-  icon                  String           @default("💰")
-  minAmount             Float
-  maxAmount             Float
-  duration              Int              // days
-  durationType          DurationType     @default(FIXED)
-  roiPercentage         Float
-  riskLevel             RiskLevel        @default(MEDIUM)
-  description           String?
-  isActive              Boolean          @default(true)
-  totalInvestments      Int              @default(0)
-  totalAmountInvested   Float            @default(0)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                  String       @id @default(cuid())
+  name                String       @unique
+  icon                String       @default("💰")
+  minAmount           Float
+  maxAmount           Float
+  duration            Int // days
+  durationType        DurationType @default(FIXED)
+  roiPercentage       Float
+  riskLevel           RiskLevel    @default(MEDIUM)
+  description         String?
+  isActive            Boolean      @default(true)
+  totalInvestments    Int          @default(0)
+  totalAmountInvested Float        @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   // Relations
-  investments           Investment[]
-  reviews               Review[]
+  investments Investment[]
+  reviews     Review[]
 
   @@index([name])
   @@index([isActive])
 }
 
 model Investment {
-  id                    String           @id @default(cuid())
-  userId                String
-  packageId             String
-  amount                Float            // Principal (locked)
-  roiPercentage         Float
-  expectedReturn        Float            // amount + (amount * roi / 100)
-  status                InvestmentStatus @default(PENDING)
-  approvalProof         String?          // transaction proof URL/file
-  maturityDate          DateTime
-  activatedAt           DateTime?        // Exact time investment was activated (for precise maturity calculation)
-  completedAt           DateTime?
-  completionProof       String?
-  notes                 String?
-  
+  id              String           @id @default(cuid())
+  userId          String
+  packageId       String
+  amount          Float // Principal (locked)
+  roiPercentage   Float
+  expectedReturn  Float // amount + (amount * roi / 100)
+  status          InvestmentStatus @default(PENDING)
+  approvalProof   String? // transaction proof URL/file
+  maturityDate    DateTime
+  activatedAt     DateTime? // Exact time investment was activated (for precise maturity calculation)
+  completedAt     DateTime?
+  completionProof String?
+  notes           String?
+
   // Payment verification
-  paymentProofFileId    String?          // Telegram file ID
-  paymentProofUrl       String?          // Cloud storage URL
-  paymentProofStatus    PaymentProofStatus @default(PENDING)
-  paymentVerifiedAt     DateTime?
+  paymentProofFileId       String? // Telegram file ID
+  paymentProofUrl          String? // Cloud storage URL
+  paymentProofStatus       PaymentProofStatus @default(PENDING)
+  paymentVerifiedAt        DateTime?
   paymentVerificationNotes String?
-  
+
   // Daily accrual tracking
-  totalProfit           Float            @default(0)  // Total expected profit (expectedReturn - amount)
-  dailyAccrualAmount    Float            @default(0)  // Calculated daily profit amount
-  totalAccruedProfit    Float            @default(0)  // Cumulative profit added so far
-  lastAccrualDate       DateTime?        // Last date accrual was calculated
-  totalWithdrawn        Float            @default(0)  // Total amount withdrawn
-  availableWithdrawable Float            @default(0)  // Current balance available to withdraw
-  
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  totalProfit           Float     @default(0) // Total expected profit (expectedReturn - amount)
+  dailyAccrualAmount    Float     @default(0) // Calculated daily profit amount
+  totalAccruedProfit    Float     @default(0) // Cumulative profit added so far
+  lastAccrualDate       DateTime? // Last date accrual was calculated
+  totalWithdrawn        Float     @default(0) // Total amount withdrawn
+  availableWithdrawable Float     @default(0) // Current balance available to withdraw
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  package               Package          @relation(fields: [packageId], references: [id])
-  review                Review?
-  withdrawalRequest     WithdrawalRequest?
-  referralBonus         ReferralBonus?
-  cryptoPayment         CryptoPayment?
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package           Package            @relation(fields: [packageId], references: [id])
+  review            Review?
+  withdrawalRequest WithdrawalRequest?
+  referralBonus     ReferralBonus?
+  cryptoPayment     CryptoPayment?
 
   @@unique([userId, id])
   @@index([userId])
@@ -184,19 +184,19 @@ model Investment {
 }
 
 model Review {
-  id                    String           @id @default(cuid())
-  userId                String
-  packageId             String?
-  investmentId          String?          @unique
-  rating                Int              // 1-5
-  comment               String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  packageId    String?
+  investmentId String?  @unique
+  rating       Int // 1-5
+  comment      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  package               Package?         @relation(fields: [packageId], references: [id], onDelete: SetNull)
-  investment            Investment?      @relation(fields: [investmentId], references: [id], onDelete: SetNull)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package    Package?    @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([packageId])
@@ -205,40 +205,40 @@ model Review {
 }
 
 model CryptoPayment {
-  id                    String           @id @default(cuid())
-  investmentId          String           @unique
-  nowpaymentsPaymentId  String?          @unique // Nowpayments payment ID
-  userId                String
-  
+  id                   String  @id @default(cuid())
+  investmentId         String  @unique
+  nowpaymentsPaymentId String? @unique // Nowpayments payment ID
+  userId               String
+
   // Payment details
-  amountUsd             Float            // Amount in USD
-  cryptocurrency        String           // BTC, ETH, USDT, etc.
-  amountCrypto          String?          // Amount in crypto (as string for precision)
-  blockchain            String?          // Blockchain network for USDT (e.g., ethereum, polygon, bsc)
-  
+  amountUsd      Float // Amount in USD
+  cryptocurrency String // BTC, ETH, USDT, etc.
+  amountCrypto   String? // Amount in crypto (as string for precision)
+  blockchain     String? // Blockchain network for USDT (e.g., ethereum, polygon, bsc)
+
   // Payment status
-  status                String           @default("PENDING") // PENDING, PROCESSING, CONFIRMED, FAILED, EXPIRED, CANCELLED
-  
+  status String @default("PENDING") // PENDING, PROCESSING, CONFIRMED, FAILED, EXPIRED, CANCELLED
+
   // Nowpayments webhook data
-  paymentAddress        String?          // Wallet address to send payment to
-  paymentUrl            String?          // Payment link from Nowpayments
-  paystatus             String?          // Status from Nowpayments API
-  
+  paymentAddress String? // Wallet address to send payment to
+  paymentUrl     String? // Payment link from Nowpayments
+  paystatus      String? // Status from Nowpayments API
+
   // Tracking
-  expiresAt             DateTime         // Payment expires after this time
-  confirmedAt           DateTime?        // When payment was confirmed
-  failedAt              DateTime?        // When payment failed/expired
-  
+  expiresAt   DateTime // Payment expires after this time
+  confirmedAt DateTime? // When payment was confirmed
+  failedAt    DateTime? // When payment failed/expired
+
   // Retry tracking
-  retryCount            Int              @default(0)
-  lastRetryAt           DateTime?
-  
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  retryCount  Int       @default(0)
+  lastRetryAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  investment            Investment       @relation(fields: [investmentId], references: [id], onDelete: Cascade)
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([investmentId])
   @@index([userId])
@@ -249,23 +249,23 @@ model CryptoPayment {
 }
 
 model ReferralBonus {
-  id                    String           @id @default(cuid())
-  referrerId            String           // User who referred (will earn bonus)
-  investmentId          String           @unique // Investment that triggered bonus
-  referredUserId        String?          // User who was referred and made investment
-  bonusAmount           Float            // Calculated bonus amount
-  bonusPercentage       Float            // Percentage used to calculate bonus
-  investmentAmount      Float            // Original investment amount that triggered bonus
-  status                String           @default("CREDITED") // CREDITED, WITHDRAWN
-  creditedAt            DateTime         @default(now())
-  withdrawnAt           DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id               String    @id @default(cuid())
+  referrerId       String // User who referred (will earn bonus)
+  investmentId     String    @unique // Investment that triggered bonus
+  referredUserId   String? // User who was referred and made investment
+  bonusAmount      Float // Calculated bonus amount
+  bonusPercentage  Float // Percentage used to calculate bonus
+  investmentAmount Float // Original investment amount that triggered bonus
+  status           String    @default("CREDITED") // CREDITED, WITHDRAWN
+  creditedAt       DateTime  @default(now())
+  withdrawnAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Relations
-  referrer              User             @relation("referrer", fields: [referrerId], references: [id], onDelete: Cascade)
-  investment            Investment       @relation(fields: [investmentId], references: [id], onDelete: Cascade)
-  referredUser          User?            @relation("referredUser", fields: [referredUserId], references: [id], onDelete: SetNull)
+  referrer     User       @relation("referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  referredUser User?      @relation("referredUser", fields: [referredUserId], references: [id], onDelete: SetNull)
 
   @@index([referrerId])
   @@index([investmentId])
@@ -275,22 +275,22 @@ model ReferralBonus {
 }
 
 model Announcement {
-  id                    String           @id @default(cuid())
-  title                 String
-  message               String
-  mediaFileId           String?          // Optional: photo, video, or GIF file_id
-  mediaType             String?          // 'photo', 'video', 'animation'
-  targetType            TargetType       @default(ALL)
-  targetUserIds         String[]         @default([]) // JSON array of user IDs if SPECIFIC_USERS
-  sentBy                User             @relation("sentBy", fields: [sentById], references: [id])
-  sentById              String
-  totalRecipients       Int              @default(0)
-  successCount          Int              @default(0)
-  failureCount          Int              @default(0)
-  status                String           @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  sentAt                DateTime?
+  id              String     @id @default(cuid())
+  title           String
+  message         String
+  mediaFileId     String? // Optional: photo, video, or GIF file_id
+  mediaType       String? // 'photo', 'video', 'animation'
+  targetType      TargetType @default(ALL)
+  targetUserIds   String[]   @default([]) // JSON array of user IDs if SPECIFIC_USERS
+  sentBy          User       @relation("sentBy", fields: [sentById], references: [id])
+  sentById        String
+  totalRecipients Int        @default(0)
+  successCount    Int        @default(0)
+  failureCount    Int        @default(0)
+  status          String     @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  sentAt          DateTime?
 
   @@index([sentById])
   @@index([status])
@@ -298,17 +298,17 @@ model Announcement {
 }
 
 model AdminLog {
-  id                    String           @id @default(cuid())
-  adminId               String
-  action                String           // e.g., "APPROVE_INVESTMENT", "SUSPEND_USER"
-  targetType            String           // e.g., "INVESTMENT", "USER", "ANNOUNCEMENT"
-  targetId              String?
-  details               String?          // JSON
-  ipAddress             String?
-  createdAt             DateTime         @default(now())
+  id         String   @id @default(cuid())
+  adminId    String
+  action     String // e.g., "APPROVE_INVESTMENT", "SUSPEND_USER"
+  targetType String // e.g., "INVESTMENT", "USER", "ANNOUNCEMENT"
+  targetId   String?
+  details    String? // JSON
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
   // Relations
-  admin                 User             @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  admin User @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId])
   @@index([action])
@@ -317,43 +317,43 @@ model AdminLog {
 }
 
 model WithdrawalRequest {
-  id                    String           @id @default(cuid())
-  userId                String
-  investmentId          String?          @unique
-  amount                Float
-  bankDetails           String?          // Encrypted
-  status                String           @default("PENDING") // PENDING, PROCESSING, COMPLETED, REJECTED
-  
+  id           String  @id @default(cuid())
+  userId       String
+  investmentId String? @unique
+  amount       Float
+  bankDetails  String? // Encrypted
+  status       String  @default("PENDING") // PENDING, PROCESSING, COMPLETED, REJECTED
+
   // Wallet details
-  walletId              String?
-  walletAddress         String?          // Crypto wallet address
-  cryptocurrency        String?          // USDT
-  blockchain            String?          // ERC-20, TRC-20, BEP-20, Polygon
-  
+  walletId       String?
+  walletAddress  String? // Crypto wallet address
+  cryptocurrency String? // USDT
+  blockchain     String? // ERC-20, TRC-20, BEP-20, Polygon
+
   // Email verification
-  emailVerificationToken String?          // Token from email verification
-  emailVerificationExpiry DateTime?       // When token expires
-  emailVerified         Boolean          @default(false)  // Whether email verification completed
-  
+  emailVerificationToken  String? // Token from email verification
+  emailVerificationExpiry DateTime? // When token expires
+  emailVerified           Boolean   @default(false) // Whether email verification completed
+
   // Admin approval & processing
-  approvedAt            DateTime?
-  approvedBy            String?          // Admin user ID who approved
-  completedAt           DateTime?
-  rejectionReason       String?
-  
+  approvedAt      DateTime?
+  approvedBy      String? // Admin user ID who approved
+  completedAt     DateTime?
+  rejectionReason String?
+
   // NOWPayments integration
-  nowpaymentsPaymentId  String?          // Payment ID from NOWPayments
-  paymentStatus         String?          // PENDING, CONFIRMING, CONFIRMED, SENDING, FINISHED, FAILED, EXPIRED
-  paymentUrl            String?          // Payment link/details from NOWPayments
-  
+  nowpaymentsPaymentId String? // Payment ID from NOWPayments
+  paymentStatus        String? // PENDING, CONFIRMING, CONFIRMED, SENDING, FINISHED, FAILED, EXPIRED
+  paymentUrl           String? // Payment link/details from NOWPayments
+
   // Tracking
-  notes                 String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  investment            Investment?      @relation(fields: [investmentId], references: [id], onDelete: SetNull)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status])
@@ -362,20 +362,20 @@ model WithdrawalRequest {
 }
 
 model Notification {
-  id                    String           @id @default(cuid())
-  userId                String
-  title                 String           // Notification title
-  message               String           // Notification message
-  type                  String           @default("INFO") // INFO, SUCCESS, WARNING, ERROR, INVESTMENT, WITHDRAWAL, ANNOUNCEMENT, SUPPORT
-  investmentId          String?          // Link to investment if applicable
-  withdrawalId          String?          // Link to withdrawal if applicable
-  supportTicketId       String?          // Link to support ticket if applicable
-  isRead                Boolean          @default(false)
-  createdAt             DateTime         @default(now())
-  readAt                DateTime?
+  id              String    @id @default(cuid())
+  userId          String
+  title           String // Notification title
+  message         String // Notification message
+  type            String    @default("INFO") // INFO, SUCCESS, WARNING, ERROR, INVESTMENT, WITHDRAWAL, ANNOUNCEMENT, SUPPORT
+  investmentId    String? // Link to investment if applicable
+  withdrawalId    String? // Link to withdrawal if applicable
+  supportTicketId String? // Link to support ticket if applicable
+  isRead          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  readAt          DateTime?
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isRead])
@@ -384,47 +384,47 @@ model Notification {
 }
 
 model PaymentAccount {
-  id                    String           @id @default(cuid())
-  accountNumber         String           
-  bankName              String           
-  accountName           String           
-  instructions          String?          // Instructions for transfer
-  isActive              Boolean          @default(true)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id            String   @id @default(cuid())
+  accountNumber String
+  bankName      String
+  accountName   String
+  instructions  String? // Instructions for transfer
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([isActive])
   @@index([createdAt])
 }
 
 model Settings {
-  id                    String           @id @default(cuid())
-  key                   String           @unique
-  value                 String           // JSON-stringified
-  type                  String           @default("string") // string, number, boolean, json
-  description           String?
-  updatedAt             DateTime         @updatedAt
-  updatedBy             String?
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String // JSON-stringified
+  type        String   @default("string") // string, number, boolean, json
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
 
   @@index([key])
 }
 
 model SupportTicket {
-  id                    String           @id @default(cuid())
-  userId                String           // User who created the ticket
-  subject               String
-  description           String           // Initial complaint description
-  status                String           @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
-  priority              String           @default("MEDIUM") // LOW, MEDIUM, HIGH
-  attachmentUrls        String[]         @default([]) // JSON array of file URLs from initial complaint
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  resolvedAt            DateTime?        // When admin marked as resolved
-  closedAt              DateTime?        // When ticket was closed
+  id             String    @id @default(cuid())
+  userId         String // User who created the ticket
+  subject        String
+  description    String // Initial complaint description
+  status         String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority       String    @default("MEDIUM") // LOW, MEDIUM, HIGH
+  attachmentUrls String[]  @default([]) // JSON array of file URLs from initial complaint
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  resolvedAt     DateTime? // When admin marked as resolved
+  closedAt       DateTime? // When ticket was closed
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages              SupportMessage[]
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
 
   @@index([userId])
   @@index([status])
@@ -433,19 +433,19 @@ model SupportTicket {
 }
 
 model SupportMessage {
-  id                    String           @id @default(cuid())
-  ticketId              String
-  senderId              String           // User ID or Admin ID (from User model)
-  senderType            String           // "USER" or "ADMIN"
-  senderName            String?          // Name of sender (for display)
-  message               String           // Message content
-  attachmentUrls        String[]         @default([]) // JSON array of file URLs
-  isAdminMessage        Boolean          @default(false) // True if sent by admin
-  createdAt             DateTime         @default(now())
+  id             String   @id @default(cuid())
+  ticketId       String
+  senderId       String // User ID or Admin ID (from User model)
+  senderType     String // "USER" or "ADMIN"
+  senderName     String? // Name of sender (for display)
+  message        String // Message content
+  attachmentUrls String[] @default([]) // JSON array of file URLs
+  isAdminMessage Boolean  @default(false) // True if sent by admin
+  createdAt      DateTime @default(now())
 
   // Relations
-  ticket                SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender                User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@index([senderId])
@@ -453,18 +453,18 @@ model SupportMessage {
 }
 
 model Wallet {
-  id                    String           @id @default(cuid())
-  userId                String
-  cryptocurrency        String           // USDT
-  blockchain            String           // ERC-20, TRC-20, BEP-20, Polygon, etc.
-  walletAddress         String           // Crypto wallet address
-  isDefault             Boolean          @default(false)
-  label                 String?          // Custom label (e.g., "Main Wallet", "Trading")
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  cryptocurrency String // USDT
+  blockchain     String // ERC-20, TRC-20, BEP-20, Polygon, etc.
+  walletAddress  String // Crypto wallet address
+  isDefault      Boolean  @default(false)
+  label          String? // Custom label (e.g., "Main Wallet", "Trading")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, walletAddress, cryptocurrency, blockchain])
   @@index([userId])
@@ -473,13 +473,13 @@ model Wallet {
 }
 
 model CurrencySettings {
-  id                    String           @id @default(cuid())
-  type                  String           // DEPOSIT or WITHDRAWAL
-  cryptocurrency        String           // USDT, BTC, ETH, etc.
-  isEnabled             Boolean          @default(true)
-  blockchains           String           // JSON array of supported blockchains
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id             String   @id @default(cuid())
+  type           String // DEPOSIT or WITHDRAWAL
+  cryptocurrency String // USDT, BTC, ETH, etc.
+  isEnabled      Boolean  @default(true)
+  blockchains    String // JSON array of supported blockchains
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([type, cryptocurrency])
   @@index([type])
@@ -487,18 +487,52 @@ model CurrencySettings {
 }
 
 model HelpArticle {
-  id                    String           @id @default(cuid())
-  title                 String           // Button label (e.g., "How to Trade")
-  icon                  String           @default("📋") // Emoji icon
-  content               String           // Full article content (can be multi-line)
-  category              String?          // Category for organization
-  order                 Int              @default(0) // Display order
-  isActive              Boolean          @default(true) // Show/hide article
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id        String   @id @default(cuid())
+  title     String // Button label (e.g., "How to Trade")
+  icon      String   @default("📋") // Emoji icon
+  content   String // Full article content (can be multi-line)
+  category  String? // Category for organization
+  order     Int      @default(0) // Display order
+  isActive  Boolean  @default(true) // Show/hide article
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([category])
   @@index([isActive])
   @@index([order])
 }
 
+model PayoutProof {
+  id              String   @id @default(cuid())
+  walletAddress   String // Recipient wallet address (may be truncated for privacy)
+  transactionLink String // Full blockchain explorer URL (e.g., BSCScan, TronScan)
+  amount          Float? // Amount withdrawn (optional for privacy)
+  blockchain      String // Blockchain name (e.g., "Binance Smart Chain", "Tron")
+  cryptocurrency  String   @default("USDT") // Crypto type
+  submittedBy     String // Admin user ID who submitted
+  description     String? // Optional description or notes
+  isVerified      Boolean  @default(true) // Mark as verified by admin
+  proofDate       DateTime @default(now()) // When the payout was made
+  createdAt       DateTime @default(now()) // When proof was added to system
+  updatedAt       DateTime @updatedAt
+
+  @@index([blockchain])
+  @@index([createdAt])
+  @@index([isVerified])
+}
+
+model BotVisitor {
+  id               String   @id @default(cuid())
+  telegramId       BigInt   @unique // Every unique person who ever clicked Start
+  username         String? // Telegram username if available
+  firstName        String?
+  lastName         String?
+  firstVisitedAt   DateTime @default(now()) // When they first clicked /start
+  lastVisitedAt    DateTime @updatedAt // Last time they interacted with bot
+  hasRegistered    Boolean  @default(false) // Whether they completed registration
+  registeredUserId String? // Link to User table if they registered
+
+  @@index([telegramId])
+  @@index([hasRegistered])
+  @@index([firstVisitedAt])
+}

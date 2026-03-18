@@ -555,10 +555,10 @@ export class InvestmentService {
       // Generate email verification token
       const { token, expiry } = UserService.generateVerificationToken();
 
-      // Create withdrawal request for referral bonus
+      // Create withdrawal request for referral bonus (no investmentId since it's accumulated from multiple investments)
       const withdrawal = await prisma.withdrawalRequest.create({
         data: {
-          investmentId: `REF_BONUS_${userId}_${Date.now()}`, // Unique ID for referral bonus
+          investmentId: null, // Referral bonuses are not tied to a specific investment
           userId,
           amount,
           status: "UNVERIFIED",

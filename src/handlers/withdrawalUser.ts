@@ -6,6 +6,7 @@ import UserService from "../services/user.js";
 import InvestmentService from "../services/investment.js";
 import TelegramNotificationService from "../services/telegramNotification.js";
 import { config } from "../config/env.js";
+import { mainMenuKeyboard } from "../utils/keyboard.js";
 
 type SessionContext = Context & { session: any };
 
@@ -24,12 +25,16 @@ export async function handleSelectWalletForWithdrawal(
     });
 
     if (!investment) {
-      await ctx.reply("❌ Investment not found.");
+      await ctx.reply("❌ Investment not found.", {
+        reply_markup: mainMenuKeyboard,
+      });
       return;
     }
 
     if (investment.userId !== ctx.session.userId) {
-      await ctx.reply("❌ Unauthorized access.");
+      await ctx.reply("❌ Unauthorized access.", {
+        reply_markup: mainMenuKeyboard,
+      });
       return;
     }
 
@@ -79,7 +84,9 @@ export async function handleSelectWalletForWithdrawal(
     });
   } catch (error) {
     logger.error("Error selecting wallet for withdrawal:", error);
-    await ctx.reply("❌ Error loading wallets. Please try again.");
+    await ctx.reply("❌ Error loading wallets. Please try again.", {
+      reply_markup: mainMenuKeyboard,
+    });
   }
 }
 
@@ -98,12 +105,16 @@ export async function handleConfirmWalletForWithdrawal(
     });
 
     if (!wallet || wallet.userId !== ctx.session.userId) {
-      await ctx.reply("❌ Wallet not found.");
+      await ctx.reply("❌ Wallet not found.", {
+        reply_markup: mainMenuKeyboard,
+      });
       return;
     }
 
     if (!ctx.session.withdrawalData?.investmentId) {
-      await ctx.reply("❌ Invalid withdrawal request.");
+      await ctx.reply("❌ Invalid withdrawal request.", {
+        reply_markup: mainMenuKeyboard,
+      });
       return;
     }
 
@@ -112,7 +123,9 @@ export async function handleConfirmWalletForWithdrawal(
     });
 
     if (!investment) {
-      await ctx.reply("❌ Investment not found.");
+      await ctx.reply("❌ Investment not found.", {
+        reply_markup: mainMenuKeyboard,
+      });
       return;
     }
 
@@ -136,7 +149,9 @@ Enter the amount you want to withdraw:\n\n
     });
   } catch (error) {
     logger.error("Error confirming wallet for withdrawal:", error);
-    await ctx.reply("❌ Error processing wallet selection. Please try again.");
+    await ctx.reply("❌ Error processing wallet selection. Please try again.", {
+      reply_markup: mainMenuKeyboard,
+    });
   }
 }
 
@@ -316,7 +331,9 @@ Blockchain: ${blockchain}\n\n
     delete ctx.session.withdrawalData;
   } catch (error) {
     logger.error("Error confirming crypto withdrawal:", error);
-    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`, {
+      reply_markup: mainMenuKeyboard,
+    });
   }
 }
 
@@ -400,6 +417,8 @@ export async function handleResendWithdrawalVerification(ctx: SessionContext): P
     logger.info(`Withdrawal verification email resent for request ${withdrawalRequest.id}`);
   } catch (error) {
     logger.error("Error resending withdrawal verification:", error);
-    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`, {
+      reply_markup: mainMenuKeyboard,
+    });
   }
 }

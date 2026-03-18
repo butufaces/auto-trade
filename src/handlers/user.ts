@@ -9,6 +9,7 @@ import PaymentAccountService from "../services/paymentAccount.js";
 import TelegramNotificationService from "../services/telegramNotification.js";
 import CurrencyService from "../services/currency.js";
 import AboutService from "../services/about.js";
+import BotVisitorService from "../services/botVisitor.js";
 import { config } from "../config/env.js";
 import logger from "../config/logger.js";
 import { handleAdminPanel } from "./admin.js";
@@ -36,6 +37,19 @@ type SessionContext = Context & { session: any };
  */
 export async function handleStart(ctx: SessionContext): Promise<void> {
   logger.info(`📄 PAGE SHOWN: Main Menu / Start Screen by user ${ctx.session.userId}`);
+
+  // Track this visitor (for broadcast notifications to all who ever interacted with bot)
+  try {
+    await BotVisitorService.trackVisitor(
+      BigInt(ctx.from!.id),
+      ctx.from?.username,
+      ctx.from?.first_name,
+      ctx.from?.last_name
+    );
+  } catch (error) {
+    logger.error("Failed to track visitor:", error);
+    // Don't let this error block /start command
+  }
 
   // Check if user is admin from session (already verified by middleware)
   if (ctx.session.isAdmin) {
@@ -2447,10 +2461,10 @@ Share your referral code with friends to earn bonuses when they invest.`;
 }
 
 /**
- * Withdraw referral bonus - Ask for amount
+ * Withdraw referral bonus - Select wallet first
  */
 export async function handleWithdrawReferralBonus(ctx: SessionContext): Promise<void> {
-  logger.info(`📄 PAGE SHOWN: Withdraw Referral Bonus`);
+  logger.info(`📄 PAGE SHOWN: Withdraw Referral Bonus - Select Wallet`);
 
   try {
     const user = await UserService.getUserById(ctx.session.userId);
@@ -2460,6 +2474,28 @@ export async function handleWithdrawReferralBonus(ctx: SessionContext): Promise<
       await ctx.reply("❌ No referral earnings available to withdraw", {
         reply_markup: mainMenuKeyboard,
       });
+      return;
+    }
+
+    // Get user's wallets
+    const wallets = await prisma.wallet.findMany({
+      where: { userId: ctx.session.userId },
+      orderBy: { isDefault: "desc" },
+    });
+
+    if (wallets.length === 0) {
+      await ctx.reply(
+        `❌ <b>No Wallets Found</b>\n\nPlease add a crypto wallet first to withdraw your referral earnings.\n\nTap "⚙️ Settings" → "💰 My Wallets" to add one.`,
+        {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "➕ Add Wallet", callback_data: "add_wallet" }],
+              [{ text: "🔙 Back", callback_data: "view_my_referrals" }],
+            ],
+          },
+        }
+      );
       return;
     }
 
@@ -2473,17 +2509,83 @@ export async function handleWithdrawReferralBonus(ctx: SessionContext): Promise<
 💰 Total Referral Earnings: ${formatCurrency(user.referralEarnings)}\n
 📊 Minimum Required: ${formatCurrency(minimumThreshold)}\n
 ${canWithdraw ? "✅ You can withdraw now!" : `⏳ You need ${formatCurrency(minimumThreshold - user.referralEarnings)} more to withdraw.`}\n\n
-${canWithdraw ? "Enter the amount you want to withdraw (or type \"max\" for all):" : "Keep earning to reach the minimum amount!"}`;
+<b>Step 1: Select a wallet</b>`;
+
+    const keyboard = {
+      inline_keyboard: wallets.map((wallet: any) => [
+        {
+          text: `${wallet.label || wallet.blockchain} ${wallet.isDefault ? "⭐" : ""}`,
+          callback_data: `withdraw_referral_select_wallet_${wallet.id}`,
+        },
+      ]),
+    };
+
+    keyboard.inline_keyboard.push([
+      { text: "➕ Add New Wallet", callback_data: "add_wallet" },
+      { text: "🔙 Back", callback_data: "view_my_referrals" },
+    ]);
 
     await ctx.reply(
       message,
       {
         parse_mode: "HTML",
-        reply_markup: { remove_keyboard: true },
+        reply_markup: keyboard,
       }
     );
   } catch (error) {
     logger.error("Error initiating referral bonus withdrawal:", error);
+    await ctx.reply(`❌ Error: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Confirm wallet selection for referral bonus withdrawal
+ */
+export async function handleConfirmWalletForReferralWithdrawal(
+  ctx: SessionContext,
+  walletId: string
+): Promise<void> {
+  logger.info(`📄 PAGE SHOWN: Enter Referral Withdrawal Amount`);
+
+  try {
+    const wallet = await prisma.wallet.findUnique({
+      where: { id: walletId },
+    });
+
+    if (!wallet || wallet.userId !== ctx.session.userId) {
+      await ctx.reply("❌ Wallet not found or unauthorized access.");
+      return;
+    }
+
+    if (!ctx.session.withdrawalData || ctx.session.withdrawalData.withdrawalType !== "REFERRAL_BONUS") {
+      await ctx.reply("❌ No active referral bonus withdrawal request");
+      return;
+    }
+
+    // Store wallet info in session
+    ctx.session.withdrawalData.walletId = walletId;
+    ctx.session.withdrawalData.walletAddress = wallet.walletAddress;
+    ctx.session.withdrawalData.blockchain = wallet.blockchain;
+    ctx.session.withdrawalData.cryptocurrency = wallet.cryptocurrency;
+
+    const message = `<b>💸 Withdraw Referral Bonus</b>\n\n
+💰 Available: ${formatCurrency(ctx.session.withdrawalData.availableAmount)}\n
+<b>Step 2: Enter amount</b>\n
+Enter the amount you want to withdraw (or type "max" for all):`;
+
+    const { InlineKeyboard } = await import("grammy");
+    const keyboard = new InlineKeyboard();
+    keyboard.text("❌ Cancel", "cancel_withdrawal");
+
+    await ctx.reply(
+      message,
+      {
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      }
+    );
+  } catch (error) {
+    logger.error("Error confirming wallet for referral withdrawal:", error);
     await ctx.reply(`❌ Error: ${(error as Error).message}`);
   }
 }
@@ -2496,6 +2598,12 @@ export async function handleReferralBonusAmountInput(ctx: SessionContext): Promi
 
   if (!ctx.session.withdrawalData || ctx.session.withdrawalData.withdrawalType !== "REFERRAL_BONUS") {
     await ctx.reply("❌ No active referral bonus withdrawal request");
+    return;
+  }
+
+  // Verify wallet was selected
+  if (!ctx.session.withdrawalData.walletId) {
+    await ctx.reply("❌ Please select a wallet first.");
     return;
   }
 
@@ -2575,7 +2683,7 @@ export async function handleConfirmReferralWithdrawal(ctx: SessionContext): Prom
       return;
     }
 
-    // Check if user has a wallet configured
+    // Check if user has a wallet configured and wallet was selected
     const userWallets = await prisma.wallet.findMany({
       where: { userId: userId },
     });
@@ -2585,6 +2693,25 @@ export async function handleConfirmReferralWithdrawal(ctx: SessionContext): Prom
         `❌ No wallet found. Please add a crypto wallet first before withdrawing.\n\nTap "⚙️ Settings" → "💰 My Wallets" to add one.`,
         { parse_mode: "HTML" }
       );
+      return;
+    }
+
+    // Get the wallet selected in the previous step
+    const selectedWallet = ctx.session.withdrawalData.walletId
+      ? await prisma.wallet.findUnique({
+          where: { id: ctx.session.withdrawalData.walletId },
+        })
+      : userWallets.find((w: any) => w.isDefault) || userWallets[0];
+
+    if (!selectedWallet) {
+      await ctx.reply("❌ Wallet selection was lost. Please try again.");
+      delete ctx.session.withdrawalData;
+      return;
+    }
+
+    if (selectedWallet.userId !== userId) {
+      await ctx.reply("❌ Unauthorized wallet access.");
+      delete ctx.session.withdrawalData;
       return;
     }
 
@@ -2646,14 +2773,19 @@ export async function handleConfirmReferralWithdrawal(ctx: SessionContext): Prom
 
     logger.info(`✅ Referral bonus withdrawal initiated: ${userId} requesting ${withdrawAmount}`);
 
-    // Notify admin
+    // Notify admin with wallet details
     try {
       const adminIds = await import("../lib/helpers.js").then(m => m.getAdminIds());
-      const notificationMessage = `💸 <b>New Referral Bonus Withdrawal Request</b>\n\n
-User: ${getUserDisplayName(user)}\n
-Amount: ${formatCurrency(withdrawAmount)}\n
-Status: Pending Email Verification\n\n
-Awaiting user email verification...`;
+      
+      const walletInfo = selectedWallet
+        ? `💳 <b>Wallet Details:</b>\n🪙 ${selectedWallet.cryptocurrency || "USDT"}\n⛓️ ${selectedWallet.blockchain}\n📍 <code>${selectedWallet.walletAddress}</code>\n\n`
+        : "";
+
+      let notificationMessage = `💸 <b>New Referral Bonus Withdrawal Request</b>\n\n`;
+      notificationMessage += `<b>User Details:</b>\n👤 ${getUserDisplayName(user)}\n📧 ${user.email}\n\n`;
+      notificationMessage += `<b>💰 Withdrawal Details:</b>\n💵 Amount: ${formatCurrency(withdrawAmount)}\n◀️ Type: Referral Bonus\n\n`;
+      notificationMessage += walletInfo;
+      notificationMessage += `<b>⚠️ Status:</b>\n🔐 Pending Email Verification\n\n<b>Action Required:</b>\nUser must verify their email before processing.`;
 
       for (const adminId of adminIds) {
         ctx.api.sendMessage(Number(adminId), notificationMessage, { parse_mode: "HTML" }).catch(() => {});
