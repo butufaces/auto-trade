@@ -51,6 +51,7 @@ enum PaymentProofStatus {
 
 enum TargetType {
   ALL
+  ALL_BOT_VISITORS
   ACTIVE_INVESTORS
   COMPLETED_INVESTORS
   NON_INVESTORS

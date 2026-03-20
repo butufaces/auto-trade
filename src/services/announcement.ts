@@ -86,18 +86,20 @@ export class AnnouncementService {
         });
 
       case "ALL_BOT_VISITORS":
-        // Get all bot visitor telegram IDs and find corresponding users
+        // Get all bot visitor telegram IDs (both registered and unregistered)
+        logger.info(`[getTargetUsers] Fetching all bot visitors...`);
         const allVisitors = await prisma.botVisitor.findMany({
           select: { telegramId: true },
         });
-        const visitorTelegramIds = allVisitors.map((v) => v.telegramId);
-        return await prisma.user.findMany({
-          where: {
-            telegramId: { in: visitorTelegramIds },
-            status: "ACTIVE",
-          },
-          select: { telegramId: true, id: true },
-        });
+        logger.info(`[getTargetUsers] Found ${allVisitors.length} total bot visitors`);
+        
+        // Return visitor telegram IDs directly so we can send to all (registered or not)
+        const result = allVisitors.map((v) => ({
+          telegramId: v.telegramId,
+          id: v.telegramId.toString(), // Use telegramId as ID for unregistered visitors
+        })) as any[];
+        logger.info(`[getTargetUsers] Returning ${result.length} visitors for announcement`);
+        return result;
 
       default:
         return [];

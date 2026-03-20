@@ -607,7 +607,7 @@ export async function handleSendAnnouncement(ctx: SessionContext): Promise<void>
       announcementTarget,
       targetUserIds
     );
-    logger.info(`[handleSendAnnouncement] ✅ Found ${targetUsers.length} target users`);
+    logger.info(`[handleSendAnnouncement] ✅ Found ${targetUsers.length} target users for target: ${announcementTarget}`);
 
     if (targetUsers.length === 0) {
       logger.warn(`[handleSendAnnouncement] No users found for target audience: ${announcementTarget}`);
@@ -726,8 +726,9 @@ export async function handleSendAnnouncement(ctx: SessionContext): Promise<void>
     delete ctx.session.announcementMediaType;
     logger.info(`[handleSendAnnouncement] ✅ Session cleared`);
   } catch (error) {
-    logger.error(`[handleSendAnnouncement] ❌ Unhandled error:`, error);
-    await ctx.reply("❌ Failed to send announcement", { reply_markup: adminMenuKeyboard });
+    logger.error(`[handleSendAnnouncement] ❌ Unhandled error:`, error instanceof Error ? error.message : String(error));
+    logger.error(`[handleSendAnnouncement] Full error:`, error);
+    await ctx.reply(`❌ Failed to send announcement\n\nError: ${error instanceof Error ? error.message : String(error)}`, { reply_markup: adminMenuKeyboard });
   }
 }
 
@@ -1530,22 +1531,30 @@ export async function handleBotVisitorStats(ctx: SessionContext): Promise<void> 
     
     const stats = await BotVisitorService.getAdminStats();
 
+    // Calculate rates
+    const conversionRate = stats.total > 0 
+      ? ((stats.registered / stats.total) * 100).toFixed(2)
+      : "0.00";
+    const activeInvestorRate = stats.registered > 0 
+      ? ((stats.activeInvestors / stats.registered) * 100).toFixed(2)
+      : "0.00";
+
     const message = `<b>🤖 Bot Visitor Statistics</b>\n\n
 <b>👥 All Visitors (clicked /start):</b>
-• Total: ${stats.total}
+Total: <b>${stats.total}</b>
 
 <b>📝 Registration Status:</b>
-• Registered: ${stats.registered}
-• Unregistered: ${stats.unregistered}
+Registered: <b>${stats.registered}</b>
+Unregistered: <b>${stats.unregistered}</b>
 
 <b>💰 Investment Status:</b>
-• Active Investors: ${stats.activeInvestors}
-• Inactive Investors: ${stats.inactiveInvestors}
-• Non-Investors: ${stats.nonInvestors}
+Active Investors: <b>${stats.activeInvestors}</b>
+Inactive Investors: <b>${stats.inactiveInvestors}</b>
+Non-Investors: <b>${stats.nonInvestors}</b>
 
-<b>Summary:</b>
-• Conversion Rate: ${stats.total > 0 ? ((stats.registered / stats.total) * 100).toFixed(2) : 0}%
-• Active Investor Rate: ${stats.registered > 0 ? ((stats.activeInvestors / stats.registered) * 100).toFixed(2) : 0}%`;
+<b>📊 Analytics:</b>
+Conversion Rate: <b>${conversionRate}%</b>
+Active Investor Rate: <b>${activeInvestorRate}%</b>`;
 
     await ctx.reply(message, {
       parse_mode: "HTML",

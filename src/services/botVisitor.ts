@@ -27,10 +27,11 @@ class BotVisitorService {
           lastName,
           firstVisitedAt: new Date(),
           lastVisitedAt: new Date(),
+          hasRegistered: false,
         },
       });
 
-      logger.info(`[VISITOR] Tracked visitor: ${telegramId}`);
+      logger.info(`[VISITOR] ✅ Tracked visitor: ${telegramId}`);
       return visitor;
     } catch (error) {
       logger.error("[VISITOR] Error tracking visitor:", error);
@@ -54,7 +55,7 @@ class BotVisitorService {
         },
       });
 
-      logger.info(`[VISITOR] Marked as registered: ${telegramId}`);
+      logger.info(`[VISITOR] ✅ REGISTERED: Marked visitor ${telegramId} as registered (UserId: ${registeredUserId})`);
       return visitor;
     } catch (error) {
       logger.error("[VISITOR] Error marking visitor as registered:", error);
@@ -87,15 +88,24 @@ class BotVisitorService {
     unregistered: number;
   }> {
     try {
-      const [total, registered] = await Promise.all([
-        prisma.botVisitor.count(),
-        prisma.botVisitor.count({ where: { hasRegistered: true } }),
-      ]);
+      const total = await prisma.botVisitor.count();
+      
+      // Count users with email (those who completed registration)
+      const allVisitors = await prisma.botVisitor.findMany({
+        select: { telegramId: true },
+      });
+      
+      const registeredCount = await prisma.user.count({
+        where: {
+          telegramId: { in: allVisitors.map((v) => v.telegramId) },
+          email: { not: null }, // Only count users who have email set
+        },
+      });
 
       return {
         total,
-        registered,
-        unregistered: total - registered,
+        registered: registeredCount,
+        unregistered: total - registeredCount,
       };
     } catch (error) {
       logger.error("[VISITOR] Error fetching visitor stats:", error);
@@ -133,6 +143,7 @@ class BotVisitorService {
     try {
       // Get total bot visitors (all who clicked /start)
       const total = await prisma.botVisitor.count();
+      logger.info(`[VISITOR] Total bot visitors (clicked /start): ${total}`);
 
       // Get all bot visitor telegram IDs
       const allVisitors = await prisma.botVisitor.findMany({
@@ -140,12 +151,17 @@ class BotVisitorService {
       });
 
       const allTelegramIds = allVisitors.map((v) => v.telegramId);
+      logger.info(`[VISITOR] Fetched ${allTelegramIds.length} telegram IDs from BotVisitors`);
 
-      // Get which visitors have User records (meaning they registered)
+      // Get Users that match these telegram IDs AND have completed registration
+      // A user is truly "registered" only if they have an email set (required during registration)
       const registeredUsers = await prisma.user.findMany({
         where: {
           telegramId: {
             in: allTelegramIds,
+          },
+          email: {
+            not: null, // Only count users who have set an email (they completed registration)
           },
         },
         include: {
@@ -158,7 +174,11 @@ class BotVisitorService {
       const registered = registeredUsers.length;
       const unregistered = total - registered;
 
-      // Categorize registered users
+      logger.info(
+        `[VISITOR] Registered calculation: found ${registeredUsers.length} users with email (completed registration) out of ${total} total visitors`
+      );
+
+      // Categorize registered users by investment status
       let activeInvestors = 0;
       let inactiveInvestors = 0;
       let nonInvestors = 0;
@@ -171,15 +191,18 @@ class BotVisitorService {
 
         if (hasActiveInvestment) {
           activeInvestors++;
+          logger.debug(`[VISITOR] User ${user.id} is active investor`);
         } else if (hasAnyInvestment) {
           inactiveInvestors++;
+          logger.debug(`[VISITOR] User ${user.id} is inactive investor`);
         } else {
           nonInvestors++;
+          logger.debug(`[VISITOR] User ${user.id} is non-investor`);
         }
       }
 
       logger.info(
-        `[VISITOR] Admin stats: total=${total}, registered=${registered}, unregistered=${unregistered}, activeInvestors=${activeInvestors}, inactiveInvestors=${inactiveInvestors}, nonInvestors=${nonInvestors}`
+        `[VISITOR] Final stats: total=${total}, registered=${registered}, unregistered=${unregistered}, activeInvestors=${activeInvestors}, inactiveInvestors=${inactiveInvestors}, nonInvestors=${nonInvestors}`
       );
 
       return {
