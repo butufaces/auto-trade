@@ -36,18 +36,20 @@ type SessionContext = Context & { session: any };
  * Start command
  */
 export async function handleStart(ctx: SessionContext): Promise<void> {
-  logger.info(`📄 PAGE SHOWN: Main Menu / Start Screen by user ${ctx.session.userId}`);
+  const telegramId = BigInt(ctx.from!.id);
+  logger.info(`📄 /START COMMAND: Telegram ID ${telegramId} clicked /start`);
 
   // Track this visitor (for broadcast notifications to all who ever interacted with bot)
   try {
-    await BotVisitorService.trackVisitor(
-      BigInt(ctx.from!.id),
+    const tracked = await BotVisitorService.trackVisitor(
+      telegramId,
       ctx.from?.username,
       ctx.from?.first_name,
       ctx.from?.last_name
     );
+    logger.info(`✅ VISITOR TRACKED: ${telegramId} - hasRegistered: ${tracked.hasRegistered}`);
   } catch (error) {
-    logger.error("Failed to track visitor:", error);
+    logger.error("❌ Failed to track visitor:", error);
     // Don't let this error block /start command
   }
 
@@ -57,10 +59,21 @@ export async function handleStart(ctx: SessionContext): Promise<void> {
   }
 
   // Fetch user for display purposes only
-  const user = await UserService.getUserByTelegramId(BigInt(ctx.from!.id));
+  const user = await UserService.getUserByTelegramId(telegramId);
 
   if (!user) {
-    await ctx.reply("❌ Failed to initialize user");
+    logger.info(`⚠️ UNREGISTERED VISITOR: ${telegramId} has no User record yet`);
+    // Send registration prompt
+    await ctx.reply(
+      "👋 Welcome! Please click the button below to register and start investing.",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📝 Register Now", callback_data: "start_registration" }],
+          ],
+        },
+      }
+    );
     return;
   }
 
