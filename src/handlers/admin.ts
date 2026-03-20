@@ -16,6 +16,7 @@ import {
   createUserStatusKeyboard,
 } from "../utils/keyboard.js";
 import prisma from "../db/client.js";
+import BotVisitorService from "../services/botVisitor.js";
 
 type SessionContext = Context & { session: any };
 
@@ -424,6 +425,7 @@ export async function handleCreateAnnouncement(ctx: SessionContext): Promise<voi
 
     const targetKeyboard = {
       inline_keyboard: [
+        [{ text: "🤖 All Bot Visitors", callback_data: "announce_all_visitors" }],
         [{ text: "👥 All Users", callback_data: "announce_all" }],
         [{ text: "📈 Active Investors", callback_data: "announce_active" }],
         [{ text: "🚫 Non-Investors", callback_data: "announce_noninvestors" }],
@@ -1516,6 +1518,47 @@ export async function handleRemoveWelcomeMedia(ctx: SessionContext): Promise<voi
         },
       }
     );
+  }
+}
+
+/**
+ * View bot visitor statistics
+ */
+export async function handleBotVisitorStats(ctx: SessionContext): Promise<void> {
+  try {
+    logger.info(`📄 PAGE SHOWN: Bot Visitor Statistics`);
+    
+    const stats = await BotVisitorService.getAdminStats();
+
+    const message = `<b>🤖 Bot Visitor Statistics</b>\n\n
+<b>👥 All Visitors (clicked /start):</b>
+• Total: ${stats.total}
+
+<b>📝 Registration Status:</b>
+• Registered: ${stats.registered}
+• Unregistered: ${stats.unregistered}
+
+<b>💰 Investment Status:</b>
+• Active Investors: ${stats.activeInvestors}
+• Inactive Investors: ${stats.inactiveInvestors}
+• Non-Investors: ${stats.nonInvestors}
+
+<b>Summary:</b>
+• Conversion Rate: ${stats.total > 0 ? ((stats.registered / stats.total) * 100).toFixed(2) : 0}%
+• Active Investor Rate: ${stats.registered > 0 ? ((stats.activeInvestors / stats.registered) * 100).toFixed(2) : 0}%`;
+
+    await ctx.reply(message, {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🔄 Refresh", callback_data: "bot_visitor_stats" }],
+          [{ text: "🏠 Back to Admin", callback_data: "back_to_admin_menu" }],
+        ],
+      },
+    });
+  } catch (error) {
+    logger.error("Error fetching bot visitor stats:", error);
+    await ctx.reply(`❌ Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

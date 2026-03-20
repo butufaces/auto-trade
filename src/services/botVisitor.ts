@@ -118,6 +118,83 @@ class BotVisitorService {
       throw error;
     }
   }
+
+  /**
+   * Get detailed admin stats including investor breakdown
+   */
+  static async getAdminStats(): Promise<{
+    total: number;
+    registered: number;
+    unregistered: number;
+    activeInvestors: number;
+    inactiveInvestors: number;
+    nonInvestors: number;
+  }> {
+    try {
+      // Get total bot visitors (all who clicked /start)
+      const total = await prisma.botVisitor.count();
+
+      // Get all bot visitor telegram IDs
+      const allVisitors = await prisma.botVisitor.findMany({
+        select: { telegramId: true },
+      });
+
+      const allTelegramIds = allVisitors.map((v) => v.telegramId);
+
+      // Get which visitors have User records (meaning they registered)
+      const registeredUsers = await prisma.user.findMany({
+        where: {
+          telegramId: {
+            in: allTelegramIds,
+          },
+        },
+        include: {
+          investments: {
+            select: { status: true },
+          },
+        },
+      });
+
+      const registered = registeredUsers.length;
+      const unregistered = total - registered;
+
+      // Categorize registered users
+      let activeInvestors = 0;
+      let inactiveInvestors = 0;
+      let nonInvestors = 0;
+
+      for (const user of registeredUsers) {
+        const hasActiveInvestment = user.investments.some(
+          (inv) => inv.status === "ACTIVE"
+        );
+        const hasAnyInvestment = user.investments.length > 0;
+
+        if (hasActiveInvestment) {
+          activeInvestors++;
+        } else if (hasAnyInvestment) {
+          inactiveInvestors++;
+        } else {
+          nonInvestors++;
+        }
+      }
+
+      logger.info(
+        `[VISITOR] Admin stats: total=${total}, registered=${registered}, unregistered=${unregistered}, activeInvestors=${activeInvestors}, inactiveInvestors=${inactiveInvestors}, nonInvestors=${nonInvestors}`
+      );
+
+      return {
+        total,
+        registered,
+        unregistered,
+        activeInvestors,
+        inactiveInvestors,
+        nonInvestors,
+      };
+    } catch (error) {
+      logger.error("[VISITOR] Error fetching admin stats:", error);
+      throw error;
+    }
+  }
 }
 
 export default BotVisitorService;

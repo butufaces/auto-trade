@@ -127,6 +127,7 @@ import {
   handleWelcomeMediaVideo,
   handleWelcomeMediaAnimation,
   handleRemoveWelcomeMedia,
+  handleBotVisitorStats,
 } from "./handlers/admin.js";
 
 import {
@@ -612,6 +613,7 @@ bot.hears("🎬 Welcome Media", requireAdmin, handleManageWelcomeMedia);
 bot.hears("📦 Manage Packages", requireAdmin, handleManagePackages);
 bot.hears("💱 Manage Currency", requireAdmin, handleManageCurrency);
 bot.hears("💳 Payment Accounts", requireAdmin, handleAdminPaymentAccounts);
+bot.hears("🤖 Bot Stats", requireAdmin, handleBotVisitorStats);
 bot.hears("✅ Payment Verification", requireAdmin, handleAdminPaymentVerification);
 bot.hears("🎁 Referral Settings", requireAdmin, handleReferralSettings);
 
@@ -1350,6 +1352,9 @@ bot.on("callback_query", async (ctx) => {
     // Announcement target
     if (data === "announce_all") {
       ctx.session.announcementTarget = "ALL";
+      return handleAskAnnouncementTitle(ctx);
+    } else if (data === "announce_all_visitors") {
+      ctx.session.announcementTarget = "ALL_BOT_VISITORS";
       return handleAskAnnouncementTitle(ctx);
     } else if (data === "announce_active") {
       ctx.session.announcementTarget = "ACTIVE_INVESTORS";
@@ -2103,6 +2108,11 @@ When they use your code during registration, you'll earn a bonus from their inve
     if (data === "back_to_admin_menu") {
       logNavigation("Referral Settings", "Admin Panel", ctx.session.userId);
       return handleAdminPanel(ctx);
+    }
+
+    if (data === "bot_visitor_stats") {
+      logPageView(`Bot Visitor Stats`, ctx.session.userId);
+      return handleBotVisitorStats(ctx);
     }
 
     if (data === "admin_panel") {

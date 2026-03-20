@@ -85,6 +85,20 @@ export class AnnouncementService {
           select: { telegramId: true, id: true },
         });
 
+      case "ALL_BOT_VISITORS":
+        // Get all bot visitor telegram IDs and find corresponding users
+        const allVisitors = await prisma.botVisitor.findMany({
+          select: { telegramId: true },
+        });
+        const visitorTelegramIds = allVisitors.map((v) => v.telegramId);
+        return await prisma.user.findMany({
+          where: {
+            telegramId: { in: visitorTelegramIds },
+            status: "ACTIVE",
+          },
+          select: { telegramId: true, id: true },
+        });
+
       default:
         return [];
     }
