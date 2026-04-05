@@ -46,14 +46,14 @@ export class BonusReminderService {
         enabled: settingsMap['BONUS_REMINDER_ENABLED'] !== 'false', // Default to true
         frequencyHours: parseInt(settingsMap['BONUS_REMINDER_FREQUENCY_HOURS'] || '6', 10),
         message: settingsMap['BONUS_REMINDER_MESSAGE'] || 
-          '⏰ Your $X bonus expires in Y days!\n\n💡 Don\'t miss out! Make your first investment now to unlock your bonus when it matures.\n\nTap here to start investing 👇',
+          '⏰ Your $X bonus expires in Y days!\n\n💡 Don\'t miss out! Make your first trade now to use your bonus.\n\nTap here to start trading 👇',
       };
     } catch (error) {
       logger.error('Failed to get bonus reminder settings:', error);
       return {
         enabled: true,
         frequencyHours: 6,
-        message: '⏰ Your $X bonus expires in Y days!\n\n💡 Don\'t miss out! Make your first investment now to unlock your bonus when it matures.',
+        message: '⏰ Your $X bonus expires in Y days!\n\n💡 Don\'t miss out! Make your first trade now to use your bonus.',
       };
     }
   }
@@ -180,12 +180,15 @@ export class BonusReminderService {
       urgency = escalationSettings.criticalPrefix;
     }
 
-    // Replace template variables with formatted time
+    // Replace template variables with formatted time (support both old and new formats)
     let message = customMessage
       .replace('{bonusAmount}', `$${bonusAmount.toFixed(2)}`)
       .replace('{daysLeft}', timeRemaining.formatted)
       .replace('{X}', `$${bonusAmount.toFixed(2)}`)
-      .replace('{Y}', timeRemaining.formatted);
+      .replace('{Y}', timeRemaining.formatted)
+      .replace('$X', `$${bonusAmount.toFixed(2)}`)
+      .replace('Y days', timeRemaining.formatted)
+      .replace(/investment/gi, 'trade'); // Replace "investment" with "trade" (case-insensitive)
 
     // Add urgency prefix if not already in message
     if (urgency && !message.startsWith(urgency)) {
