@@ -463,7 +463,27 @@ export async function handleViewPortfolio(ctx: SessionContext): Promise<void> {
     message += `<b>Trading Account Summary:</b>\n`;
     message += `💰 Total Trading Capital: ${formatCurrency(profile.totalInvested)}\n`;
     message += `💵 Total Profits Earned: ${formatCurrency(profile.totalEarned)}\n`;
-    message += `🏦 Total Withdrawn: ${formatCurrency(profile.totalWithdrawn)}\n\n`;
+    message += `🏦 Total Withdrawn: ${formatCurrency(profile.totalWithdrawn)}\n`;
+
+    // Show registration bonus if available
+    try {
+      const { BonusService } = await import("../services/bonus.js");
+      const bonusStatus = await BonusService.getBonusStatus(profile.id);
+      if (bonusStatus) {
+        const bonusDisplay = bonusStatus.status === "LOCKED" 
+          ? `🎁 Registration Bonus: ${formatCurrency(bonusStatus.amount)} 🔒 (Locked until first trade)`
+          : bonusStatus.status === "UNLOCKED"
+          ? `🎁 Registration Bonus: ${formatCurrency(bonusStatus.amount)} ✅ (Ready to withdraw)`
+          : bonusStatus.status === "APPLIED"
+          ? `🎁 Registration Bonus: ${formatCurrency(bonusStatus.amount)} ✨ (Applied to withdrawal)`
+          : `🎁 Registration Bonus: ${formatCurrency(bonusStatus.amount)} ⏰ (Expired)`;
+        message += `${bonusDisplay}\n`;
+      }
+    } catch (bonusError) {
+      // Continue if bonus service fails
+    }
+    
+    message += `\n`;
 
     // Get pending withdrawals
     const pendingWithdrawals = await InvestmentService.getUserWithdrawals(

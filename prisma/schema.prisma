@@ -58,6 +58,14 @@ enum TargetType {
   SPECIFIC_USERS
 }
 
+enum BonusStatus {
+  PENDING
+  LOCKED
+  UNLOCKED
+  APPLIED
+  EXPIRED
+}
+
 // ==================== MODELS ====================
 
 model User {
@@ -85,6 +93,11 @@ model User {
   referredBy                   String?
   referralCount                Int        @default(0)
   referralEarnings             Float      @default(0) // Total earned from referrals
+  registrationBonusAmount      Float      @default(0) // Registration bonus awarded
+  registrationBonusStatus      BonusStatus @default(PENDING) // Status of registration bonus
+  registrationBonusExpiryDate  DateTime? // When bonus expires
+  hasCompletedFirstTrade       Boolean    @default(false) // Whether user completed first investment
+  lastBonusReminderSentAt      DateTime? // When last bonus reminder was sent to this user
   createdAt                    DateTime   @default(now())
   updatedAt                    DateTime   @updatedAt
   lastActiveAt                 DateTime?

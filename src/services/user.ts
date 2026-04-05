@@ -407,15 +407,21 @@ export class UserService {
   }
 
   /**
-   * Delete user (soft delete)
+   * Delete user permanently from database (hard delete with cascade)
    */
   static async deleteUser(userId: string) {
-    return await prisma.user.update({
-      where: { id: userId },
-      data: {
-        status: "DELETED",
-      },
-    });
+    try {
+      // Delete user - all related records will cascade delete due to Prisma schema
+      const deletedUser = await prisma.user.delete({
+        where: { id: userId },
+      });
+      
+      logger.info(`🗑️ User permanently deleted: ${deletedUser.telegramId} (ID: ${userId})`);
+      return deletedUser;
+    } catch (error) {
+      logger.error(`❌ Error deleting user ${userId}:`, error);
+      throw error;
+    }
   }
 
   /**

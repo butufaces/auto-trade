@@ -71,8 +71,18 @@ export async function handleAdminSettings(ctx: SessionContext): Promise<void> {
       ],
       [
         {
+          text: "🎁 Bonus Settings",
+          callback_data: "bonus_settings",
+        },
+        {
+          text: "🔔 Bonus Reminders",
+          callback_data: "bonus_reminder_settings",
+        },
+      ],
+      [
+        {
           text: "⬅️ Back to Admin",
-          callback_data: "admin",
+          callback_data: "back_to_admin",
         },
       ],
     ];

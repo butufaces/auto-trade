@@ -242,6 +242,27 @@ import {
 } from "./handlers/admin-settings.js";
 
 import {
+  handleBonusSettings,
+  handleEditBonusAmount,
+  handleEditBonusExpiry,
+  handleToggleBonusStatus,
+  handleProcessBonusSettingsInput,
+} from "./handlers/admin-bonus-settings.js";
+
+import {
+  handleBonusReminderSettings,
+  handleEditReminderFrequency,
+  handleEditReminderMessage,
+  handleToggleReminderStatus,
+  handleProcessReminderSettingsInput,
+  handleBonusEscalationSettings,
+  handleEditEscalationUrgent,
+  handleEditEscalationCritical,
+  handleEditEscalationPrefixes,
+  handleProcessEscalationSettingsInput,
+} from "./handlers/admin-bonus-reminder-settings.js";
+
+import {
   handleManageHelpArticles,
   handleViewAllHelpArticles,
   handleAddHelpArticleStart,
@@ -822,16 +843,27 @@ bot.on("callback_query", async (ctx) => {
           },
         });
       } else if (action === "delete") {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { status: "DELETED" },
-        });
-        return ctx.reply(`🗑️ <b>User Deleted</b>\n\n${user.firstName} account has been deleted`, {
-          parse_mode: "HTML",
-          reply_markup: {
-            inline_keyboard: [[{ text: "👥 Back to Users", callback_data: "back_to_users" }]],
-          },
-        });
+        try {
+          await UserService.deleteUser(userId);
+          logger.info(`🗑️ User permanently deleted: ${user.firstName} (${userId})`);
+          return ctx.reply(
+            `🗑️ <b>User Completely Removed</b>\n\n${user.firstName}'s account and all associated data have been permanently deleted from the database.\n\nThey can register again as a new user if needed.`,
+            {
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [[{ text: "👥 Back to Users", callback_data: "back_to_users" }]],
+              },
+            }
+          );
+        } catch (error) {
+          logger.error(`❌ Error deleting user ${userId}:`, error);
+          return ctx.reply(`❌ Failed to delete user: ${error instanceof Error ? error.message : "Unknown error"}`, {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [[{ text: "👤 View Details", callback_data: `user_${userId}` }]],
+            },
+          });
+        }
       }
     }
 
@@ -1146,6 +1178,60 @@ bot.on("callback_query", async (ctx) => {
 
     if (data === "edit_platform_privacy_url") {
       return handleEditPlatformPrivacyUrl(ctx);
+    }
+
+    // ==================== BONUS SETTINGS CALLBACKS ====================
+
+    if (data === "bonus_settings") {
+      return handleBonusSettings(ctx);
+    }
+
+    if (data === "edit_bonus_amount") {
+      return handleEditBonusAmount(ctx);
+    }
+
+    if (data === "edit_bonus_expiry") {
+      return handleEditBonusExpiry(ctx);
+    }
+
+    if (data === "toggle_bonus_status") {
+      return handleToggleBonusStatus(ctx);
+    }
+
+    // ==================== BONUS REMINDER SETTINGS CALLBACKS ====================
+
+    if (data === "bonus_reminder_settings") {
+      return handleBonusReminderSettings(ctx);
+    }
+
+    if (data === "edit_reminder_frequency") {
+      return handleEditReminderFrequency(ctx);
+    }
+
+    if (data === "edit_reminder_message") {
+      return handleEditReminderMessage(ctx);
+    }
+
+    if (data === "toggle_reminder_status") {
+      return handleToggleReminderStatus(ctx);
+    }
+
+    // ==================== ESCALATION CALLBACKS ====================
+
+    if (data === "bonus_escalation_settings") {
+      return handleBonusEscalationSettings(ctx);
+    }
+
+    if (data === "edit_escalation_urgent") {
+      return handleEditEscalationUrgent(ctx);
+    }
+
+    if (data === "edit_escalation_critical") {
+      return handleEditEscalationCritical(ctx);
+    }
+
+    if (data === "edit_escalation_prefixes") {
+      return handleEditEscalationPrefixes(ctx);
     }
 
     // ==================== SUPPORT CALLBACKS ====================
@@ -2292,6 +2378,24 @@ bot.on("message:text", async (ctx, next) => {
     return handlePayoutProofDescriptionInput(ctx);
   }
 
+  // Handle bonus settings input
+  if ((ctx.session as any).awaitingInput === "bonus_settings_input") {
+    const { handleProcessBonusSettingsInput } = await import("./handlers/admin-bonus-settings.js");
+    return handleProcessBonusSettingsInput(ctx, text);
+  }
+
+  // Handle bonus reminder settings input
+  if ((ctx.session as any).awaitingInput === "reminder_settings_input") {
+    const { handleProcessReminderSettingsInput } = await import("./handlers/admin-bonus-reminder-settings.js");
+    return handleProcessReminderSettingsInput(ctx, text);
+  }
+
+  // Handle escalation settings input
+  if ((ctx.session as any).awaitingInput === "escalation_settings_input") {
+    const { handleProcessEscalationSettingsInput } = await import("./handlers/admin-bonus-reminder-settings.js");
+    return handleProcessEscalationSettingsInput(ctx, text);
+  }
+
   // Handle button text messages for payout proofs (check multiple variations due to emoji encoding)
   if (text.includes("Payout Proofs") || text.includes("payout") || text === "💸 Payout Proofs") {
     logger.info(`[PAYOUTS] Button clicked with text: "${text}"`);
@@ -2839,6 +2943,26 @@ const server = createServer(async (req, res) => {
           return;
         }
 
+        // Award registration bonus after email verification
+        try {
+          const { BonusService } = await import('./services/bonus.js');
+          const bonusResult = await BonusService.awardRegistrationBonus(user.id, user.telegramId);
+          
+          // Send direct message to user about bonus
+          if (bonusResult) {
+            const bonusSettings = await BonusService.getBonusSettings();
+            const bonusMessage = `🎁 <b>Welcome Bonus Awarded!</b>\n\nYou've received <b>$${bonusSettings.registrationBonusAmount}</b> as a registration bonus!\n\n🔒 <b>Status:</b> Locked until your first investment\n⏰ <b>Expires in:</b> ${bonusSettings.registrationBonusExpiryDays} days\n\n💡 <b>To unlock your bonus:</b>\n1. Make your first investment\n2. Wait for it to mature\n3. Withdraw including the bonus!\n\nLet's get started! 🚀`;
+            try {
+              await bot.api.sendMessage(Number(user.telegramId), bonusMessage, { parse_mode: "HTML" });
+            } catch (msgError) {
+              logger.error(`[BONUS] Failed to send bonus message to user ${user.id}:`, msgError);
+            }
+          }
+        } catch (bonusError) {
+          logger.error("Failed to award registration bonus:", bonusError);
+          // Continue even if bonus fails - email is still verified
+        }
+
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(`
           <html>
@@ -2937,6 +3061,7 @@ const server = createServer(async (req, res) => {
       try {
         // Import services
         const InvestmentService = (await import("./services/investment.js")).default;
+        const { BonusService } = await import("./services/bonus.js");
         
         // Verify the withdrawal token using InvestmentService
         const verifiedWithdrawal = await InvestmentService.verifyWithdrawalToken(token);
@@ -2948,6 +3073,27 @@ const server = createServer(async (req, res) => {
         }
 
         const user = verifiedWithdrawal.user;
+
+        // Apply registration bonus to withdrawal if applicable
+        let bonusApplied = 0;
+        try {
+          const bonusResult = await BonusService.applyBonusToWithdrawal(user.id);
+          if (bonusResult) {
+            bonusApplied = bonusResult.bonusAmount;
+            logger.info(`[BONUS] Applied $${bonusApplied} to withdrawal for user ${user.id}`);
+            
+            // Send direct message to user about bonus being applied
+            const appliedMessage = `✨ <b>Bonus Applied!</b>\n\n🎁 Your <b>$${bonusApplied}</b> bonus has been added to your withdrawal!\n\n💰 <b>Total Withdrawal Amount:</b>\n${formatCurrency(verifiedWithdrawal.amount + bonusApplied)}\n\n✅ <b>Status:</b> Pending admin approval\n\nThank you for investing with us! 🚀`;
+            try {
+              await bot.api.sendMessage(Number(user.telegramId), appliedMessage, { parse_mode: "HTML" });
+            } catch (msgError) {
+              logger.error(`[BONUS] Failed to send applied message to user ${user.id}:`, msgError);
+            }
+          }
+        } catch (bonusError) {
+          logger.error("[BONUS] Failed to apply bonus to withdrawal:", bonusError);
+          // Continue with withdrawal even if bonus fails
+        }
 
         // Send admin notification about pending withdrawal
         const adminIds = getAdminIds();
@@ -2961,7 +3107,7 @@ const server = createServer(async (req, res) => {
 <b>Investment Details:</b>
 • Investment ID: <code>${verifiedWithdrawal.investment?.id || "N/A"}</code>
 • Package: ${verifiedWithdrawal.investment?.package?.name || "N/A"}
-• Withdrawal Amount: <b>${formatCurrency(verifiedWithdrawal.amount)}</b>
+• Withdrawal Amount: <b>${formatCurrency(verifiedWithdrawal.amount)}</b>${bonusApplied > 0 ? `\n• <b>🎁 Bonus Added: +${formatCurrency(bonusApplied)}</b>\n• <b>💰 Total with Bonus: ${formatCurrency(verifiedWithdrawal.amount + bonusApplied)}</b>` : ""}
 
 <b>Bank Account:</b>
 ${verifiedWithdrawal.bankDetails || "Not provided"}
@@ -2984,7 +3130,7 @@ ${verifiedWithdrawal.bankDetails || "Not provided"}
         // Send confirmation message to user via Telegram
         if (user && user.telegramId) {
           try {
-            const userMessage = `✅ <b>Withdrawal Request Verified!</b>\n\n💰 Amount: <b>${formatCurrency(verifiedWithdrawal.amount)}</b>\n\n📋 Your withdrawal request has been verified and sent to our administration team for approval.\n\n⏳ <b>Status:</b> Pending Admin Review\n\nYou will receive a notification as soon as a decision is made.\n\n<i>Withdrawal ID: ${verifiedWithdrawal.id}</i>`;
+            const userMessage = `✅ <b>Withdrawal Request Verified!</b>\n\n💰 Amount: <b>${formatCurrency(verifiedWithdrawal.amount)}</b>${bonusApplied > 0 ? `\n🎁 <b>Bonus Added: +${formatCurrency(bonusApplied)}</b>\n💵 <b>Total: ${formatCurrency(verifiedWithdrawal.amount + bonusApplied)}</b>` : ""}\n\n📋 Your withdrawal request has been verified and sent to our administration team for approval.\n\n⏳ <b>Status:</b> Pending Admin Review\n\nYou will receive a notification as soon as a decision is made.\n\n<i>Withdrawal ID: ${verifiedWithdrawal.id}</i>`;
             await bot.api.sendMessage(Number(user.telegramId), userMessage, { parse_mode: "HTML" });
             logger.info(`Withdrawal verification confirmation sent to user ${user.id}`);
           } catch (error) {

@@ -182,6 +182,44 @@ export class InvestmentService {
 
     logger.info(`Investment marked as matured: ${investmentId}, Total available: ${totalAvailable}`);
 
+    // Unlock registration bonus on first matured investment
+    try {
+      const { BonusService } = await import("../services/bonus.js");
+      // Check if this is the user's first matured investment
+      const maturedCount = await prisma.investment.count({
+        where: {
+          userId: investment.userId,
+          status: "MATURED",
+        },
+      });
+
+      if (maturedCount === 1) {
+        // This is the first matured investment - unlock bonus
+        const bonusUnlocked = await BonusService.unlockRegistrationBonus(investment.userId);
+        
+        // Send direct message to user about bonus unlocking
+        if (bonusUnlocked) {
+          try {
+            const userWithBonus = await prisma.user.findUnique({
+              where: { id: investment.userId },
+            });
+            
+            if (userWithBonus) {
+              const bot = (await import("../index.js")).default;
+              const bonusAmount = (userWithBonus as any).registrationBonusAmount || 0;
+              const unlockedMessage = `🔓 <b>Bonus Unlocked!</b>\n\n🎉 Your $${bonusAmount} bonus has been unlocked!\n\n✅ <b>What's next:</b>\nYour bonus is now ready to be added to your next withdrawal.\n\n💰 <b>Your Balance:</b>\nWhen you withdraw, the bonus will be automatically added to your withdrawal amount!\n\n📝 <i>The bonus will expire if not withdrawn within the specified period.</i>`;
+              await bot.api.sendMessage(Number(userWithBonus.telegramId), unlockedMessage, { parse_mode: "HTML" });
+            }
+          } catch (msgError) {
+            logger.error(`[BONUS] Failed to send unlock message to user ${investment.userId}:`, msgError);
+          }
+        }
+      }
+    } catch (bonusError) {
+      logger.error(`[BONUS] Failed to unlock bonus for user ${investment.userId}:`, bonusError);
+      // Continue even if bonus fails - maturity is already processed
+    }
+
     return updated;
   }
 

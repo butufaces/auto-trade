@@ -4,6 +4,7 @@ import logger from "../config/logger.js";
 import { config } from "../config/env.js";
 import prisma from "../db/client.js";
 import bot from "../index.js";
+import { BonusReminderService } from "../services/bonus-reminder.js";
 
 /**
  * Start all scheduled tasks
@@ -69,6 +70,15 @@ export function startScheduledTasks(bot: any): void {
       await checkExpiredPayments(bot);
     } catch (error) {
       logger.error("Error checking expired payments:", error);
+    }
+  });
+
+  // Bonus reminder check (every 15 minutes)
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      await BonusReminderService.sendBonusReminders(bot);
+    } catch (error) {
+      logger.error("Error sending bonus reminders:", error);
     }
   });
 
