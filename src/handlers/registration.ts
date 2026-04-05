@@ -41,11 +41,15 @@ Let's get you set up. Please provide the following information:
 2️⃣ Email
 3️⃣ Phone Number
 
-Let's start with your name. What's your first name?`;
+<b><u><i>What's your first name?</i></u></b>`;
 
   ctx.session.registrationStep = "firstName";
   await ctx.reply(message, {
-    reply_markup: { remove_keyboard: true },
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+      ],
+    },
     parse_mode: "HTML",
   });
 }
@@ -64,7 +68,8 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
     if (ctx.session.registrationStep === "firstName") {
       if (input.length < 2 || input.length > 50) {
         await ctx.reply(
-          "❌ Name should be between 2-50 characters. Try again:"
+          "❌ Name should be between 2-50 characters. Try again:",
+          { reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] } }
         );
         return;
       }
@@ -74,13 +79,19 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
       };
       ctx.session.registrationStep = "lastName";
 
-      await ctx.reply("✅ Got it! Now, what's your last name?", {
-        reply_markup: { remove_keyboard: true },
+      await ctx.reply("✅ Got it!\n\n<b><u><i>What's your last name?</i></u></b>", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+          ],
+        },
+        parse_mode: "HTML",
       });
     } else if (ctx.session.registrationStep === "lastName") {
       if (input.length < 2 || input.length > 50) {
         await ctx.reply(
-          "❌ Last name should be between 2-50 characters. Try again:"
+          "❌ Last name should be between 2-50 characters. Try again:",
+          { reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] } }
         );
         return;
       }
@@ -89,9 +100,13 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
       ctx.session.registrationStep = "email";
 
       await ctx.reply(
-        "✅ Now, please enter your email address:\n\n💡 <i>This will be used for account verification and important notifications</i>",
+        "✅ Got it!\n\n<b><u><i>Please enter your email address</i></u></b>\n\n💡 <i>This will be used for account verification and important notifications</i>",
         {
-          reply_markup: { remove_keyboard: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+            ],
+          },
           parse_mode: "HTML",
         }
       );
@@ -99,14 +114,18 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
       if (!emailRegex.test(input)) {
-        await ctx.reply("❌ Invalid email format. Please try again:");
+        await ctx.reply("❌ Invalid email format. Please try again:\n\n(or send /cancel to skip)", {
+          reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] }
+        });
         return;
       }
 
       const emailExists = await UserService.emailExists(input);
       if (emailExists) {
         await ctx.reply(
-          "❌ This email is already registered. Please use a different email:"
+          "❌ This email is already registered. Please use a different email:",
+          { reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] },
+          parse_mode: "HTML" }
         );
         return;
       }
@@ -115,9 +134,13 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
       ctx.session.registrationStep = "phone";
 
       await ctx.reply(
-        "✅ Now, please enter your phone number:\n\n💡 <i>Example: +1234567890 or 1234567890</i>",
+        "✅ Got it!\n\n<b><u><i>Please enter your phone number</i></u></b>\n\n💡 <i>Example: +1234567890 or 1234567890</i>",
         {
-          reply_markup: { remove_keyboard: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+            ],
+          },
           parse_mode: "HTML",
         }
       );
@@ -126,7 +149,8 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
 
       if (input.length < 10 || input.length > 20) {
         await ctx.reply(
-          "❌ Invalid phone number. Should be 10-20 digits. Try again:"
+          "❌ Invalid phone number. Should be 10-20 digits. Try again:",
+          { reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] } }
         );
         return;
       }
@@ -135,34 +159,47 @@ export async function handleRegistrationInput(ctx: SessionContext): Promise<void
       ctx.session.registrationStep = "referral";
 
       await ctx.reply(
-        "✅ Do you have a referral code? (Optional)\n\n💡 <i>If you were invited by someone, enter their referral code. Otherwise, just type 'skip'</i>",
+        "✅ Got it!\n\n<b><u><i>Do you have a referral code?</i></u></b>\n\n💡 <i>If you were invited by someone, enter their referral code or send /skip</i>",
         {
-          reply_markup: { remove_keyboard: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+            ],
+          },
           parse_mode: "HTML",
         }
       );
     } else if (ctx.session.registrationStep === "referral") {
       let referralCode: string | undefined;
 
-      if (input.toLowerCase() !== "skip" && input.trim().length > 0) {
-        // Validate referral code
+      // Check if user wants to skip referral
+      if (input.trim().toLowerCase() === "/skip") {
+        logger.info(`[REGISTRATION] User skipped referral code (${ctx.session.userId})`);
+      } else if (input.trim().length > 0) {
+        // Validate referral code only if user provided something
         const validation = await ReferralService.validateReferralCode(
           input,
           ctx.session.userId
         );
 
         if (!validation.valid) {
-          await ctx.reply(`❌ ${validation.message}\n\nPlease enter a valid referral code or type 'skip':`);
+          await ctx.reply(`❌ ${validation.message}\n\nPlease enter a valid referral code or send /skip:`, {
+            reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }]] }
+          });
           return;
         }
 
         referralCode = input;
         logger.info(`[REGISTRATION] ✅ Referral code validated: ${referralCode}`);
         await ctx.reply(`✅ Referral code accepted!`, {
-          reply_markup: { remove_keyboard: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+            ],
+          },
         });
       } else {
-        logger.info(`[REGISTRATION] User skipped referral code`);
+        logger.info(`[REGISTRATION] User did not provide a referral code`);
       }
 
       ctx.session.registrationData.referralCode = referralCode;
@@ -177,7 +214,12 @@ ${referralCode ? `🎁 Referral Code: ${referralCode}` : ""}
 
 Is this correct?`,
         {
-          reply_markup: confirmationKeyboard,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Yes, Confirm", callback_data: "confirm_yes" }, { text: "❌ No, Edit", callback_data: "confirm_no" }],
+              [{ text: "🏠 Back to Menu", callback_data: "cancel_registration" }],
+            ],
+          },
           parse_mode: "HTML",
         }
       );
@@ -203,9 +245,9 @@ export async function handleConfirmRegistration(
     delete ctx.session.registrationData;
 
     await ctx.reply(
-      "❌ Registration cancelled. Let's start over. What's your first name?",
+      "❌ Registration cancelled. You can tap 🚀 Begin Trading to start registration again.",
       {
-        reply_markup: { remove_keyboard: true },
+        reply_markup: mainMenuKeyboard,
       }
     );
     return;

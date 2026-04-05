@@ -64,10 +64,10 @@ export async function handleStartAddPayoutProof(
     `💸 <b>Add New Payout Proof</b>\n\n
 Let's add a new withdrawal proof to boost user confidence!\n
 <b>Step 1: Enter the wallet address</b>\n
-Please provide the blockchain wallet address where the withdrawal was sent (e.g., 0x742d35Cc6634C0532925a3b844Bc92d426e6b456):`,
+Please provide the blockchain wallet address where the withdrawal was sent (e.g., 0x742d35Cc6634C0532925a3b844Bc92d426e6b456):\n\n(or send /cancel to skip)`,
     {
       parse_mode: "HTML",
-      reply_markup: { remove_keyboard: true },
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
     }
   );
 
@@ -151,9 +151,9 @@ export async function handlePayoutProofBlockchainSelect(
   if (blockchain === "other") {
     ctx.session.awaitingInput = "payout_proof_blockchain_custom";
     await ctx.reply(
-      "Please enter the blockchain name (e.g., Polygon, Fantom, Avalanche):",
+      "Please enter the blockchain name (e.g., Polygon, Fantom, Avalanche):\n\n(or send /cancel to skip)",
       {
-        reply_markup: { remove_keyboard: true },
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
       }
     );
   } else {
@@ -168,10 +168,10 @@ export async function handlePayoutProofBlockchainSelect(
     await ctx.reply(
       `✅ Blockchain: ${ctx.session.payoutProofData.blockchain}\n\n
 <b>Step 3: Enter the transaction link</b>\n
-Please provide the transaction link on the blockchain explorer (e.g., https://etherscan.io/tx/0x123...):`,
+Please provide the transaction link on the blockchain explorer (e.g., https://etherscan.io/tx/0x123...):\n\n(or send /cancel to skip)`,
       {
         parse_mode: "HTML",
-        reply_markup: { remove_keyboard: true },
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
       }
     );
   }
@@ -219,7 +219,9 @@ export async function handlePayoutProofTransactionLinkInput(
     (!transactionLink.startsWith("http://") &&
       !transactionLink.startsWith("https://"))
   ) {
-    await ctx.reply('❌ Please provide a valid URL (starting with http:// or https://)');
+    await ctx.reply('❌ Please provide a valid URL (starting with http:// or https://)\n\n(or send /cancel to skip)', {
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
+    });
     return;
   }
 
@@ -232,10 +234,10 @@ export async function handlePayoutProofTransactionLinkInput(
     `✅ Transaction link saved!\n\n
 <b>Step 4 (Optional): Enter the withdrawal amount</b>\n
 How much was withdrawn? (e.g., 5000, 15500.50)\n\n
-Or type "skip" to continue without specifying an amount:`,
+Or type "skip" to continue without specifying an amount:\n\n(or send /cancel to skip)`,
     {
       parse_mode: "HTML",
-      reply_markup: { remove_keyboard: true },
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
     }
   );
 }
@@ -249,7 +251,9 @@ export async function handlePayoutProofAmountInput(
   const input = ctx.message?.text?.trim();
 
   if (!input) {
-    await ctx.reply("❌ Please provide an amount or type 'skip'");
+    await ctx.reply("❌ Please provide an amount or type 'skip'\n\n(or send /cancel to skip)", {
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
+    });
     return;
   }
 
@@ -257,7 +261,8 @@ export async function handlePayoutProofAmountInput(
     const amount = parseFloat(input);
     if (isNaN(amount) || amount <= 0) {
       await ctx.reply(
-        "❌ Please provide a valid positive number (e.g., 5000, 15500.50)"
+        "❌ Please provide a valid positive number (e.g., 5000, 15500.50)\n\n(or send /cancel to skip)",
+        { reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] } }
       );
       return;
     }
@@ -272,10 +277,10 @@ export async function handlePayoutProofAmountInput(
     `✅ ${ctx.session.payoutProofData.amount ? `Amount: $${ctx.session.payoutProofData.amount}` : "Amount skipped"}\n\n
 <b>Step 5 (Optional): Enter the date</b>\n
 When was this withdrawal processed? (e.g., 2025-03-20, today)\n\n
-Or type "today" to use today's date, or "skip" to continue:`,
+Or type "today" to use today's date, or "skip" to continue:\n\n(or send /cancel to skip)`,
     {
       parse_mode: "HTML",
-      reply_markup: { remove_keyboard: true },
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
     }
   );
 }
@@ -289,7 +294,9 @@ export async function handlePayoutProofDateInput(
   const input = ctx.message?.text?.trim();
 
   if (!input) {
-    await ctx.reply("❌ Please provide a date or type 'skip'");
+    await ctx.reply("❌ Please provide a date or type 'skip'\n\n(or send /cancel to skip)", {
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
+    });
     return;
   }
 
@@ -306,7 +313,9 @@ export async function handlePayoutProofDateInput(
         throw new Error("Invalid date");
       }
     } catch (error) {
-      await ctx.reply("❌ Please provide a valid date (e.g., 2025-03-20) or type 'today'");
+      await ctx.reply("❌ Please provide a valid date (e.g., 2025-03-20) or type 'today'\n\n(or send /cancel to skip)", {
+        reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
+      });
       return;
     }
   }
@@ -322,10 +331,10 @@ export async function handlePayoutProofDateInput(
     `✅ Date: ${date.toISOString().split("T")[0]}\n\n
 <b>Step 6 (Optional): Add a description</b>\n
 Any additional details about this withdrawal? (e.g., "Monthly dividends payout", "Q1 2025 returns")\n\n
-Or type "skip" to finish:`,
+Or type "skip" to finish:\n\n(or send /cancel to skip)`,
     {
       parse_mode: "HTML",
-      reply_markup: { remove_keyboard: true },
+      reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "admin_cancel_payout_proof" }]] },
     }
   );
 }
@@ -419,7 +428,7 @@ export async function handlePublishPayoutProof(
     logger.info(`[ADMIN] ✅ Payout proof created: ${proof.id}`);
 
     // Broadcast notification to all visitors
-    const { successful, failed } =
+    const broadcastResult =
       await TelegramNotificationService.broadcastPayoutProof(
         walletAddress,
         blockchain,
@@ -428,10 +437,10 @@ export async function handlePublishPayoutProof(
       );
 
     // Show confirmation
-    const message = `✅ <b>Payout Proof Published!</b>\n\n
+    let message = `✅ <b>Payout Proof Published!</b>\n\n
 📊 <b>Broadcast Results:</b>
-✅ Sent to: ${successful} users
-❌ Failed: ${failed} users
+✅ Sent to: ${broadcastResult.successful} users
+❌ Failed: ${broadcastResult.failed} users
 
 💾 <b>Proof Details:</b>
 🏦 Blockchain: ${blockchain}
@@ -439,6 +448,17 @@ export async function handlePublishPayoutProof(
 🔗 <a href="${transactionLink}">View Transaction</a>
 
 The proof is now visible in the Payout Proofs section!`;
+
+    // Add detailed failure information if there are failures
+    if (broadcastResult.failedDetails && broadcastResult.failedDetails.length > 0) {
+      message += `\n\n<b>❌ Failed Deliveries (${broadcastResult.failed}):</b>\n`;
+      broadcastResult.failedDetails.slice(0, 8).forEach((failure, idx) => {
+        message += `\n${idx + 1}. Chat ID: <code>${failure.chatId}</code>\n   ⚠️ ${failure.reason.substring(0, 60)}${failure.reason.length > 60 ? "..." : ""}`;
+      });
+      if (broadcastResult.failedDetails.length > 8) {
+        message += `\n\n... and ${broadcastResult.failedDetails.length - 8} more (check logs)`;
+      }
+    }
 
     await ctx.editMessageText(message, {
       parse_mode: "HTML",

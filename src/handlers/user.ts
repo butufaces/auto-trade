@@ -173,7 +173,7 @@ Let's get you registered! Please provide the following information:
 
 Let's start with your first name:`,
       {
-        reply_markup: { remove_keyboard: true },
+        reply_markup: { inline_keyboard: [[{ text: "🏠 Back to Menu", callback_data: "back_to_menu" }]] },
         parse_mode: "HTML",
       }
     );

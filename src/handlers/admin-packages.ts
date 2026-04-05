@@ -87,11 +87,12 @@ export async function handleAddPackageStart(ctx: SessionContext): Promise<void> 
   delete ctx.session.targetUserIds;
 
   ctx.session.addPackageStep = "enter_name";
+  ctx.session.addPackageData = {};
 
   await ctx.reply(
     `<b>➕ Create New Package</b>\n\n
-Enter package name (e.g., "Premium Plan"):`,
-    { parse_mode: "HTML" }
+Enter package name (e.g., "Premium Plan"):\n\n(or send /cancel to skip)`,
+    { parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "cancel_package_add" }]] } }
   );
 }
 
@@ -230,8 +231,8 @@ Current: <b>${pkg.riskLevel}</b>`,
       await ctx.reply(
         `<b>📝 Enter Package Description</b>\n\n
 Current: ${pkg.description || "Not set"}\n\n
-Enter new description (or send /cancel to skip):`,
-        { parse_mode: "HTML" }
+Enter new description (or send /cancel to skip):\n\n(or send /cancel to skip)`,
+        { parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "cancel_package_edit" }]] } }
       );
       return;
     }
@@ -247,7 +248,7 @@ Enter new description (or send /cancel to skip):`,
       duration: "Duration (in days)",
     };
 
-    await ctx.reply(`Enter ${fieldNames[field] || field}:`, { parse_mode: "HTML" });
+    await ctx.reply(`Enter ${fieldNames[field] || field}:\n\n(or send /cancel to skip)`, { parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "❌ Cancel", callback_data: "cancel_package_edit" }]] } });
   } catch (error) {
     logger.error("Error updating package field:", error);
     await ctx.reply("❌ Error", { reply_markup: adminMenuKeyboard });

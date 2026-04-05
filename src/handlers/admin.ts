@@ -634,6 +634,7 @@ export async function handleSendAnnouncement(ctx: SessionContext): Promise<void>
 
     let successCount = 0;
     let failureCount = 0;
+    const failedUsers: Array<{ name: string; email: string; reason: string }> = [];
 
     logger.info(`[handleSendAnnouncement] Starting to send to ${targetUsers.length} users. mediaType=${announcementMediaType}, hasMediaFileId=${!!announcementMediaFileId}`);
 
@@ -690,7 +691,14 @@ export async function handleSendAnnouncement(ctx: SessionContext): Promise<void>
 
         successCount++;
       } catch (error) {
-        logger.error(`[handleSendAnnouncement] ❌ Failed to send announcement to ${user.id}:`, error);
+        const errorReason = error instanceof Error ? error.message : String(error);
+        const displayName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email || "Unknown";
+        logger.error(`[handleSendAnnouncement] ❌ Failed to send announcement to ${user.id} (${displayName}):`, errorReason);
+        failedUsers.push({
+          name: displayName,
+          email: user.email || "N/A",
+          reason: errorReason,
+        });
         failureCount++;
       }
     }
@@ -710,8 +718,19 @@ export async function handleSendAnnouncement(ctx: SessionContext): Promise<void>
     });
     logger.info(`[handleSendAnnouncement] ✅ Announcement record updated in database`);
 
-    // Notify admin
-    const result = `✅ <b>Announcement Sent Successfully!</b>\n\n📈 <b>Total Recipients:</b> ${targetUsers.length}\n✅ <b>Succeeded:</b> ${successCount}\n❌ <b>Failed:</b> ${failureCount}${announcementMediaType ? `\n📎 <b>Media Type:</b> ${announcementMediaType.toUpperCase()}` : ""}`;
+    // Build detailed result message
+    let result = `✅ <b>Announcement Sent!</b>\n\n📈 <b>Total Recipients:</b> ${targetUsers.length}\n✅ <b>Succeeded:</b> ${successCount}\n❌ <b>Failed:</b> ${failureCount}${announcementMediaType ? `\n📎 <b>Media Type:</b> ${announcementMediaType.toUpperCase()}` : ""}`;
+
+    // Add detailed failure information if there are failures
+    if (failedUsers.length > 0) {
+      result += `\n\n<b>❌ Failed Deliveries:</b>\n`;
+      failedUsers.slice(0, 10).forEach((failedUser, idx) => {
+        result += `\n${idx + 1}. <b>${failedUser.name}</b>\n   📧 ${failedUser.email}\n   ⚠️ ${failedUser.reason.substring(0, 80)}${failedUser.reason.length > 80 ? "..." : ""}`;
+      });
+      if (failedUsers.length > 10) {
+        result += `\n\n... and ${failedUsers.length - 10} more failures (see logs for details)`;
+      }
+    }
 
     await ctx.reply(result, { parse_mode: "HTML", reply_markup: adminMenuKeyboard });
     logger.info(`✅ Announcement sent successfully to ${successCount}/${targetUsers.length} users`);

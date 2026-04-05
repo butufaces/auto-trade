@@ -134,7 +134,9 @@ export const registrationSuccessKeyboard = new InlineKeyboard()
  */
 export const confirmationKeyboard = new InlineKeyboard()
   .text("✅ Yes", "confirm_yes")
-  .text("❌ No", "confirm_no");
+  .text("❌ No", "confirm_no")
+  .row()
+  .text("🔙 Back to Menu", "cancel_registration");
 
 /**
  * Yes/No Keyboard

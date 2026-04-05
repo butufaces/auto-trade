@@ -474,6 +474,16 @@ interface SessionData {
     lastName: string;
     telegramId: string | number;
   };
+  // Payout proof management
+  payoutProofData?: {
+    walletAddress?: string;
+    blockchain?: string;
+    transactionLink?: string;
+    amount?: string;
+    proofDate?: Date;
+    description?: string;
+  };
+  awaitingInput?: string;
 }
 
 // Create bot
@@ -773,7 +783,7 @@ bot.on("callback_query", async (ctx) => {
     // User status
     if (data.startsWith("user_status_")) {
       const action = data.replace("user_status_", "").split("_")[0];
-      const userId = data.split("_").slice(2).join("_");
+      const userId = data.split("_").slice(3).join("_");
       const user = await prisma.user.findUnique({ where: { id: userId } });
 
       if (!user) {
@@ -1374,6 +1384,10 @@ bot.on("callback_query", async (ctx) => {
       if (!ctx.session.userSelectionPage) ctx.session.userSelectionPage = 0;
       ctx.session.userSelectionPage--;
       return handleShowUsersForSelection(ctx);
+    } else if (data === "announce_users_next") {
+      if (!ctx.session.userSelectionPage) ctx.session.userSelectionPage = 0;
+      ctx.session.userSelectionPage++;
+      return handleShowUsersForSelection(ctx);
     } else if (data === "announce_send_now") {
       // Skip media and send announcement
       return handleSendAnnouncement(ctx);
@@ -1955,6 +1969,31 @@ bot.on("callback_query", async (ctx) => {
 
     if (data === "back_to_menu") {
       return handleStart(ctx);
+    }
+
+    if (data === "cancel_registration") {
+      delete ctx.session.registrationStep;
+      delete ctx.session.registrationData;
+      await ctx.reply("❌ Registration cancelled. You can tap 🚀 Begin Trading to start registration again.", { reply_markup: mainMenuKeyboard });
+      return;
+    }
+
+    if (data === "admin_cancel_payout_proof") {
+      delete ctx.session.payoutProofData;
+      delete ctx.session.awaitingInput;
+      await ctx.reply("❌ Payout proof submission cancelled.", { reply_markup: adminMenuKeyboard });
+      return;
+    }
+
+    if (data === "cancel_package_add" || data === "cancel_package_edit") {
+      delete ctx.session.addPackageStep;
+      delete ctx.session.addPackageData;
+      delete ctx.session.editPackageId;
+      delete ctx.session.editPackageField;
+      delete ctx.session.editPackageStep;
+      delete ctx.session.awaitingInput;
+      await ctx.reply("❌ Package operation cancelled.", { reply_markup: adminMenuKeyboard });
+      return;
     }
 
     // ==================== ADMIN NOTIFICATIONS ====================

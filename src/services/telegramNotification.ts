@@ -400,6 +400,7 @@ export class TelegramNotificationService {
     total: number;
     successful: number;
     failed: number;
+    failedDetails?: Array<{ chatId: number; reason: string }>;
   }> {
     const BotVisitorService = (await import("./botVisitor.js")).default;
     
@@ -409,7 +410,7 @@ export class TelegramNotificationService {
 
       if (chatIds.length === 0) {
         logger.info("[TELEGRAM] No visitors to broadcast payout proof to");
-        return { total: 0, successful: 0, failed: 0 };
+        return { total: 0, successful: 0, failed: 0, failedDetails: [] };
       }
 
       logger.info(
@@ -418,6 +419,7 @@ export class TelegramNotificationService {
 
       let successful = 0;
       let failed = 0;
+      const failedDetails: Array<{ chatId: number; reason: string }> = [];
 
       // Build message
       const displayWallet = `${walletAddress.substring(0, 10)}...${walletAddress.substring(
@@ -477,7 +479,9 @@ View all proofs on our Payout Proofs page.`;
 
           successful++;
         } catch (error: any) {
-          logger.warn(`[TELEGRAM] Failed to send to chat ${chatId}:`, error.message);
+          const errorReason = error?.message || String(error);
+          logger.warn(`[TELEGRAM] Failed to send to chat ${chatId}:`, errorReason);
+          failedDetails.push({ chatId: Number(chatId), reason: errorReason });
           failed++;
         }
       }
@@ -486,7 +490,7 @@ View all proofs on our Payout Proofs page.`;
         `[TELEGRAM] Payout proof broadcast complete: ${successful}/${chatIds.length} successful, ${failed} failed`
       );
 
-      return { total: chatIds.length, successful, failed };
+      return { total: chatIds.length, successful, failed, failedDetails };
     } catch (error: any) {
       logger.error("[TELEGRAM] Failed to broadcast payout proof:", error);
       throw error;
