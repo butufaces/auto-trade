@@ -17,13 +17,30 @@ export async function ensureUserExists(
 
   // Check if user data is already cached in session to avoid DB hit on every request
   if (ctx.session.userId && ctx.session.telegramId) {
-    // User already in session, just verify admin status (in-memory check only)
-    const userIsAdmin = isAdmin(ctx.session.telegramId);
-    if (ctx.session.isAdmin !== userIsAdmin) {
-      ctx.session.isAdmin = userIsAdmin;
+    // Verify cached user still exists (handles cases where user was deleted)
+    try {
+      const cachedUser = await UserService.getUserById(ctx.session.userId);
+      if (!cachedUser) {
+        // Stale session: clear and fallthrough to recreate user
+        delete ctx.session.userId;
+        delete ctx.session.telegramId;
+        delete ctx.session.isAdmin;
+      } else {
+        // User exists - just verify admin status (in-memory check only)
+        const userIsAdmin = isAdmin(ctx.session.telegramId);
+        if (ctx.session.isAdmin !== userIsAdmin) {
+          ctx.session.isAdmin = userIsAdmin;
+        }
+        await next();
+        return;
+      }
+    } catch (err) {
+      logger.error("Error validating cached session user:", err);
+      // Clear session and continue to ensure fresh creation
+      delete ctx.session.userId;
+      delete ctx.session.telegramId;
+      delete ctx.session.isAdmin;
     }
-    await next();
-    return;
   }
 
   // First time user - fetch from database
