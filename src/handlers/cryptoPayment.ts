@@ -152,15 +152,9 @@ async function fetchInvoiceUrl(
       logger.info(`[CRYPTO] Waiting for paymentId to appear in URL...`);
       
       try {
-        await page.waitForFunction(() => {
-          const url = window.location.href;
-          const hasPaymentId = url.includes('paymentId');
-          if (!hasPaymentId) {
-            logger.debug(`[CRYPTO] URL still waiting for paymentId: ${url}`);
-          }
-          return hasPaymentId;
-        }, { timeout: 20000 });
-        
+        await page.waitForFunction(() => window.location.href.includes('paymentId'), {
+          timeout: 20000,
+        });
         logger.info(`[CRYPTO] ✓ PaymentId detected in URL!`);
       } catch (e) {
         logger.warn(`[CRYPTO] Timeout waiting for paymentId, continuing with current URL...`);
